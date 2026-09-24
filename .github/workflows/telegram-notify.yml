@@ -12,14 +12,30 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - name: Check whether this push is a PR merge into main
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          # мердж PR в main тоже триггерит push — чтобы не дублировать алерт
+          # с notify-pr-merged, проверяем, связан ли коммит со смерженным PR
+          ASSOCIATED=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/commits/${SHA}/pulls")
+
+          IS_PR_MERGE=$(echo "$ASSOCIATED" | jq -r 'map(select(.merged_at != null)) | length > 0')
+          echo "is_pr_merge=${IS_PR_MERGE}" >> "$GITHUB_OUTPUT"
+
       - name: Send push notification
+        if: steps.check.outputs.is_pr_merge != 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           REPO_NAME: ${{ github.event.repository.name }}
           BRANCH: ${{ github.ref_name }}
           ACTOR: ${{ github.actor }}
-          COMMIT_AUTHOR: ${{ github.event.head_commit.author.name }}
           COMMIT_SHA: ${{ github.sha }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
@@ -28,8 +44,8 @@ jobs:
           # только первая строка сообщения коммита, без тела
           COMMIT_TITLE=$(printf '%s' "$COMMIT_MSG" | head -n1)
 
-          TEXT=$(printf '🔔 Push в main\nРепозиторий: %s\nВетка: %s\nАвтор: %s (@%s)\nКоммит: %s — "%s"\nВремя: %s' \
-            "$REPO_NAME" "$BRANCH" "$COMMIT_AUTHOR" "$ACTOR" "$SHORT_SHA" "$COMMIT_TITLE" "$TIME")
+          TEXT=$(printf '🔔 Push в main\nРепозиторий: %s\nВетка: %s\nАвтор: %s\nКоммит: %s — "%s"\nВремя: %s' \
+            "$REPO_NAME" "$BRANCH" "$ACTOR" "$SHORT_SHA" "$COMMIT_TITLE" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" \
@@ -52,7 +68,7 @@ jobs:
         run: |
           TIME=$(TZ='Europe/Moscow' date +"%Y-%m-%d %H:%M MSK")
 
-          TEXT=$(printf '🔔 Открыт PR в main\nРепозиторий: %s\nВетка: %s → %s\nАвтор: %s\nPR: #%s — "%s"\nВремя: %s' \
+          TEXT=$(printf '🚀 Открыт PR в main\nРепозиторий: %s\nВетка: %s → %s\nАвтор: %s\nPR: #%s — "%s"\nВремя: %s' \
             "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$PR_AUTHOR" "$PR_NUMBER" "$PR_TITLE" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
