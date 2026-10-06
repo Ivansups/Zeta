@@ -44,7 +44,7 @@ jobs:
           # только первая строка сообщения коммита, без тела
           COMMIT_TITLE=$(printf '%s' "$COMMIT_MSG" | head -n1)
 
-          TEXT=$(printf '🔔 Push в main\nРепозиторий: %s\nВетка: %s\nАвтор: %s\nКоммит: %s — "%s"\nВремя: %s' \
+          TEXT=$(printf '🔔 Push в main\n──────────────────\n\nРепозиторий: %s\n\nВетка: %s\n\nАвтор: %s\n\nКоммит: %s — "%s"\n\n🕒 %s' \
             "$REPO_NAME" "$BRANCH" "$ACTOR" "$SHORT_SHA" "$COMMIT_TITLE" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
@@ -68,7 +68,7 @@ jobs:
         run: |
           TIME=$(TZ='Europe/Moscow' date +"%Y-%m-%d %H:%M MSK")
 
-          TEXT=$(printf '🚀 Открыт PR в main\nРепозиторий: %s\nВетка: %s → %s\nАвтор: %s\nPR: #%s — "%s"\nВремя: %s' \
+          TEXT=$(printf '🚀 Открыт PR в main\n──────────────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nАвтор: %s\n\nPR: #%s — "%s"\n\n🕒 %s' \
             "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$PR_AUTHOR" "$PR_NUMBER" "$PR_TITLE" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
@@ -94,7 +94,7 @@ jobs:
           TIME=$(TZ='Europe/Moscow' date +"%Y-%m-%d %H:%M MSK")
           SHORT_SHA="${MERGE_SHA:0:7}"
 
-          TEXT=$(printf '✅ Merge в main\nРепозиторий: %s\nВетка: %s → %s\nСмержил: %s\nPR: #%s — "%s"\nКоммит: %s\nВремя: %s' \
+          TEXT=$(printf '✅ Merge в main\n──────────────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nСмержил: %s\n\nPR: #%s — "%s"\n\nКоммит: %s\n\n🕒 %s' \
             "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$MERGED_BY" "$PR_NUMBER" "$PR_TITLE" "$SHORT_SHA" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
