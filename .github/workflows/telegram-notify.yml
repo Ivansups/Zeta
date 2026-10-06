@@ -44,12 +44,31 @@ jobs:
           # только первая строка сообщения коммита, без тела
           COMMIT_TITLE=$(printf '%s' "$COMMIT_MSG" | head -n1)
 
-          TEXT=$(printf '🔔 Push в main\n──────────────────\n\nРепозиторий: %s\n\nВетка: %s\n\nАвтор: %s\n\nКоммит: %s — "%s"\n\n🕒 %s' \
+          # сообщение уходит с parse_mode=HTML — экранируем динамические поля
+          esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+          # GitHub-логин -> имя участника и ник-ссылка на профиль; неизвестный логин — просто ссылка
+          who() {
+            link="<a href=\"https://github.com/$1\">$1</a>"
+            case "$1" in
+              Ivansups) echo "Климов Иван ($link)" ;;
+              JustAlek24) echo "Берестнев Алексей ($link)" ;;
+              DLqwerty) echo "Ульянченко Даниил ($link)" ;;
+              LLlk0lnik) echo "Шелудько Данил ($link)" ;;
+              Nikita-RemezovOA) echo "Ремезов Никита ($link)" ;;
+              *) echo "$link" ;;
+            esac
+          }
+          ACTOR=$(who "$ACTOR")
+          REPO_NAME=$(esc "$REPO_NAME"); BRANCH=$(esc "$BRANCH"); COMMIT_TITLE=$(esc "$COMMIT_TITLE")
+
+          TEXT=$(printf '🔔 Push в main\n──────────\n\nРепозиторий: %s\n\nВетка: %s\n\nАвтор: %s\n\nКоммит: %s — "%s"\n\n🕒 %s' \
             "$REPO_NAME" "$BRANCH" "$ACTOR" "$SHORT_SHA" "$COMMIT_TITLE" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" \
-            --data-urlencode text="${TEXT}"
+            --data-urlencode text="${TEXT}" \
+            --data-urlencode parse_mode=HTML \
+            --data-urlencode disable_web_page_preview=true
 
   notify-pr-opened:
     if: github.event_name == 'pull_request' && github.event.action == 'opened'
@@ -68,12 +87,31 @@ jobs:
         run: |
           TIME=$(TZ='Europe/Moscow' date +"%Y-%m-%d %H:%M MSK")
 
-          TEXT=$(printf '🚀 Открыт PR в main\n──────────────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nАвтор: %s\n\nPR: #%s — "%s"\n\n🕒 %s' \
+          # сообщение уходит с parse_mode=HTML — экранируем динамические поля
+          esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+          # GitHub-логин -> имя участника и ник-ссылка на профиль; неизвестный логин — просто ссылка
+          who() {
+            link="<a href=\"https://github.com/$1\">$1</a>"
+            case "$1" in
+              Ivansups) echo "Климов Иван ($link)" ;;
+              JustAlek24) echo "Берестнев Алексей ($link)" ;;
+              DLqwerty) echo "Ульянченко Даниил ($link)" ;;
+              LLlk0lnik) echo "Шелудько Данил ($link)" ;;
+              Nikita-RemezovOA) echo "Ремезов Никита ($link)" ;;
+              *) echo "$link" ;;
+            esac
+          }
+          PR_AUTHOR=$(who "$PR_AUTHOR")
+          REPO_NAME=$(esc "$REPO_NAME"); HEAD_BRANCH=$(esc "$HEAD_BRANCH"); BASE_BRANCH=$(esc "$BASE_BRANCH"); PR_TITLE=$(esc "$PR_TITLE")
+
+          TEXT=$(printf '🚀 Открыт PR в main\n──────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nАвтор: %s\n\nPR: #%s — "%s"\n\n🕒 %s' \
             "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$PR_AUTHOR" "$PR_NUMBER" "$PR_TITLE" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" \
-            --data-urlencode text="${TEXT}"
+            --data-urlencode text="${TEXT}" \
+            --data-urlencode parse_mode=HTML \
+            --data-urlencode disable_web_page_preview=true
 
   notify-pr-merged:
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
@@ -94,9 +132,28 @@ jobs:
           TIME=$(TZ='Europe/Moscow' date +"%Y-%m-%d %H:%M MSK")
           SHORT_SHA="${MERGE_SHA:0:7}"
 
-          TEXT=$(printf '✅ Merge в main\n──────────────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nСмержил: %s\n\nPR: #%s — "%s"\n\nКоммит: %s\n\n🕒 %s' \
+          # сообщение уходит с parse_mode=HTML — экранируем динамические поля
+          esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+          # GitHub-логин -> имя участника и ник-ссылка на профиль; неизвестный логин — просто ссылка
+          who() {
+            link="<a href=\"https://github.com/$1\">$1</a>"
+            case "$1" in
+              Ivansups) echo "Климов Иван ($link)" ;;
+              JustAlek24) echo "Берестнев Алексей ($link)" ;;
+              DLqwerty) echo "Ульянченко Даниил ($link)" ;;
+              LLlk0lnik) echo "Шелудько Данил ($link)" ;;
+              Nikita-RemezovOA) echo "Ремезов Никита ($link)" ;;
+              *) echo "$link" ;;
+            esac
+          }
+          MERGED_BY=$(who "$MERGED_BY")
+          REPO_NAME=$(esc "$REPO_NAME"); HEAD_BRANCH=$(esc "$HEAD_BRANCH"); BASE_BRANCH=$(esc "$BASE_BRANCH"); PR_TITLE=$(esc "$PR_TITLE")
+
+          TEXT=$(printf '✅ Merge в main\n──────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nСмержил: %s\n\nPR: #%s — "%s"\n\nКоммит: %s\n\n🕒 %s' \
             "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$MERGED_BY" "$PR_NUMBER" "$PR_TITLE" "$SHORT_SHA" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" \
-            --data-urlencode text="${TEXT}"
+            --data-urlencode text="${TEXT}" \
+            --data-urlencode parse_mode=HTML \
+            --data-urlencode disable_web_page_preview=true
