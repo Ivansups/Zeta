@@ -12,7 +12,7 @@
 |---|---|---|---|
 | [`backend/`](backend) | API, авторизация, данные, LLM-обвязка | FastAPI, SQLAlchemy (async), Alembic, PostgreSQL, `uv` | Климов |
 | [`telegram-bot/`](telegram-bot) | Тонкий клиент Telegram: вход, ввод ДЗ текстом | Python, long polling, `uv` | Ульянченко |
-| [`frontend/`](frontend) | Веб-приложение и Telegram Mini App | Next.js (App Router), Tailwind, `pnpm` | Шелудько |
+| [`frontend/`](frontend) | Веб-приложение; Telegram Mini App — отдельный роут этого же приложения | Next.js (App Router), Tailwind, `pnpm` | Шелудько (веб), Ульянченко (роут Mini App) |
 | [`mobile/`](mobile) | Мобильное приложение | React Native (Expo), `pnpm` | Берестнев, Ремезов |
 
 Ревьюеры по умолчанию назначаются через [CODEOWNERS](.github/CODEOWNERS).
@@ -27,7 +27,7 @@
 graph LR
     subgraph Clients[Клиенты]
         W[frontend<br/>Next.js]
-        MA[Telegram Mini App]
+        MA[Telegram Mini App<br/>роут в frontend]
         M[mobile<br/>React Native]
         T[telegram-bot<br/>long polling]
     end

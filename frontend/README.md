@@ -1,8 +1,8 @@
 # frontend
 
-Веб-приложение и Telegram Mini App: Next.js (App Router), TypeScript, Tailwind. Только клиент — авторизация, сессии и данные целиком на стороне backend.
+Веб-приложение: Next.js (App Router), TypeScript, Tailwind. Только клиент — авторизация, сессии и данные целиком на стороне backend.
 
-Владелец: Шелудько.
+Владелец: Шелудько. Telegram Mini App — отдельный роут этого приложения, его делает Ульянченко.
 
 ```bash
 pnpm install
