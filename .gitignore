@@ -11,3 +11,7 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+# Next.js dev server re-creates these; the shared rules live in the root AGENTS.md
+/frontend/AGENTS.md
+/frontend/CLAUDE.md

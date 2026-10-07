@@ -1,0 +1,8 @@
+# Последнее подходящее правило побеждает. Владелец пакета — ревьюер по умолчанию.
+*                @Ivansups
+/backend/        @Ivansups
+/frontend/       @LLlk0lnik
+/mobile/         @JustAlek24 @Nikita-RemezovOA
+/telegram-bot/   @DLqwerty
+/.github/        @Ivansups
+/docs/           @Ivansups
