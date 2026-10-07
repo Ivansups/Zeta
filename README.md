@@ -166,3 +166,55 @@ cd telegram-bot && uv sync
 | `frontend/`, `mobile/` | `pnpm lint && pnpm typecheck && pnpm test` |
 
 Работаем по TDD (Red → Green → Refactor), коммиты — Conventional Commits, в `main` только через PR с ревью. Подробно — в [AGENTS.md](AGENTS.md).
+
+## CI и безопасность
+
+Все workflow лежат в [.github/workflows](.github/workflows). Сторонние экшены закреплены по SHA коммита (версия — в комментарии), Dependabot обновляет их раз в неделю с задержкой 7 дней, чтобы не брать только что опубликованные релизы. Права токена по умолчанию — `contents: read`.
+
+```mermaid
+graph LR
+    PR[Pull request / push в main] --> CI
+    PR --> SEC
+    PR --> CQ[codeql.yml]
+
+    subgraph CI[ci.yml]
+        CH[Определение изменённых пакетов] --> BE[backend]
+        CH --> BOT[telegram-bot]
+        CH --> FE[frontend]
+        CH --> MO[mobile]
+        BE --> OK[CI OK]
+        BOT --> OK
+        FE --> OK
+        MO --> OK
+    end
+
+    subgraph SEC[security.yml]
+        S1[gitleaks: секреты]
+        S2[Semgrep: SAST]
+        S3[Trivy: уязвимости, секреты, конфиги]
+        S4[OSV-Scanner: зависимости]
+        S5[Dependency review: новые зависимости в PR]
+        S6[zizmor: безопасность workflow]
+        S7[SBOM CycloneDX: только main]
+        S1 --> SOK[Security OK]
+        S2 --> SOK
+        S3 --> SOK
+        S4 --> SOK
+        S5 --> SOK
+        S6 --> SOK
+    end
+```
+
+| Workflow | Что делает | Когда |
+|---|---|---|
+| `ci.yml` | Для изменённых пакетов: линт, форматирование, типы, тесты (backend — с PostgreSQL, проверка единственной «головы» миграций и `alembic check`), сборка frontend, аудит зависимостей (`pip-audit`, `pnpm audit`) | PR и push в `main` |
+| `security.yml` | gitleaks, Semgrep, Trivy, OSV-Scanner, dependency review, zizmor, SBOM | PR, push в `main`, раз в неделю |
+| `codeql.yml` | CodeQL (Python, JS/TS, набор `security-extended`) | PR, push в `main`, раз в неделю |
+| `scorecard.yml` | OpenSSF Scorecard — оценка практик безопасности репозитория | push в `main`, раз в неделю |
+| `telegram-notify.yml` | Уведомления в Telegram о push/PR/merge | как раньше |
+
+**Required checks для `main`** (Settings → Branches → Branch protection): `CI OK` и `Security OK`. Отдельные джобы обязательными не делаем: при PR, который не трогает пакет, они пропускаются, а пропущенная обязательная проверка блокирует мерж. Заодно стоит включить «Require review from Code Owners» и запрет force push.
+
+Что нужно включить в настройках репозитория: Code scanning (для CodeQL и Scorecard), Dependabot alerts и Dependabot security updates, Secret scanning с push protection.
+
+Локально те же проверки пакета описаны в разделе «Проверки». Известное ограничение: для `braces` и `node-forge` в npm пока нет исправленных версий, поэтому два advisory явно игнорируются в `auditConfig` (`frontend/pnpm-workspace.yaml`, `mobile/pnpm-workspace.yaml`) — это транзитивные dev-зависимости, при выходе фикса записи нужно удалить.

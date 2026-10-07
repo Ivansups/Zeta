@@ -1,3 +1,11 @@
 allowBuilds:
   '@parcel/watcher': false
   unrs-resolver: false
+
+# No patched releases are published to npm yet (braces latest is 3.0.3, fix is 3.0.4;
+# node-forge latest is 1.4.0, fix is 1.4.1). Transitive dev tooling (Metro, Expo CLI).
+# Remove these once the fixed versions exist.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
+    - GHSA-86w9-cpqp-85rv

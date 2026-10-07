@@ -1,0 +1,5 @@
+rules:
+  excessive-permissions:
+    ignore:
+      # Telegram alerts workflow is intentionally left as is; it has no permissions block.
+      - telegram-notify.yml
