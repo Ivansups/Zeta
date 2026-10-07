@@ -1,0 +1,22 @@
+# Все записи — транзитивные dev-зависимости (Expo CLI, Metro, ESLint, Jest),
+# в продовый код они не попадают. Пересмотреть до даты ignoreUntil.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-12-01
+reason = "braces: в npm нет исправленной версии (latest 3.0.3, фикс 3.0.4); только dev-инструменты"
+
+[[IgnoredVulns]]
+id = "GHSA-86w9-cpqp-85rv"
+ignoreUntil = 2026-12-01
+reason = "node-forge: в npm нет исправленной версии (latest 1.4.0, фикс 1.4.1); Expo CLI, только dev"
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2026-12-01
+reason = "sprintf-js 1.0.3 приходит из js-yaml 3 / argparse 1 (Jest, ESLint); исправления для этой ветки нет, только dev"
+
+[[IgnoredVulns]]
+id = "GHSA-w5hq-g745-h8pq"
+ignoreUntil = 2026-12-01
+reason = "uuid 7.0.3 приходит из xcode (Expo config plugins, iOS prebuild); фикс только в uuid 11 — мажорный скачок вслепую не делаем"

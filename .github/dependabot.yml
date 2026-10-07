@@ -1,0 +1,61 @@
+version: 2
+
+# `cooldown` delays brand-new releases, which is the main defence against
+# freshly published malicious versions.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /telegram-bot
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      js-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      js-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: docker-compose
+    directory: /backend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
