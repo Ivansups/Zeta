@@ -1,7 +1,4 @@
-import os
-
 import pytest
-
 from config import load_settings
 
 
@@ -23,5 +20,5 @@ def test_load_settings_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BOT_TOKEN", "123:abc")
     monkeypatch.setenv("BACKEND_URL", "http://localhost:8000")
     s = load_settings()
-    assert s.bot_token == "123:abc"
+    assert s.bot_token == "123:abc"  # noqa: S105
     assert s.backend_url == "http://localhost:8000"

@@ -5,7 +5,6 @@ from __future__ import annotations
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-
 from services.health import HealthService
 
 router = Router()

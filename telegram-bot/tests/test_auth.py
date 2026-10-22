@@ -2,12 +2,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from aiogram.types import Message, User
-
 from handlers.auth import auth_start_handler
 
 
 @pytest.mark.asyncio
-async def test_auth_start_sends_confirm_with_token_and_telegram_id(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_auth_start_sends_confirm_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("BOT_TOKEN", "123:abc")
     monkeypatch.setenv("BACKEND_URL", "http://localhost:8000")
     user = User(id=12345, is_bot=False, first_name="Test")
@@ -34,15 +35,17 @@ async def test_auth_start_sends_confirm_with_token_and_telegram_id(monkeypatch: 
         call_args = mock_session.post.call_args
         url = call_args.args[0]
         assert "/auth/telegram/confirm" in url
-        json_data = call_args.kwargs.get("json") or call_args.args[1] if len(call_args.args) > 1 else call_args.kwargs.get("json")
         # check payload
         if "json" in call_args.kwargs:
-            assert call_args.kwargs["json"] == {"token": "abc123", "telegram_id": 12345}
+            assert call_args.kwargs["json"] == {
+                "token": "abc123",
+                "telegram_id": 12345,
+            }
         else:
-            # try to find json in args
             found = False
             for a in call_args.args:
                 if isinstance(a, dict) and "token" in a:
                     assert a == {"token": "abc123", "telegram_id": 12345}
                     found = True
-            assert found or call_args.kwargs.get("json") == {"token": "abc123", "telegram_id": 12345}
+            expected = {"token": "abc123", "telegram_id": 12345}
+            assert found or call_args.kwargs.get("json") == expected
