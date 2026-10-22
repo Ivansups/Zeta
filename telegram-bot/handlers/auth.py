@@ -46,8 +46,7 @@ async def auth_start_handler(message: Message) -> None:
     except Exception as e:
         # banan: заглушка при отсутствии контракта/ошибке - логируем
         logger.warning(
-            "banan: auth confirm stub: token=%s telegram_id=%s error=%s",
-            token,
+            "banan: auth confirm stub: telegram_id=%s error=%s",
             telegram_id,
             e,
         )
