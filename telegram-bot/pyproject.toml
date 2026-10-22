@@ -3,7 +3,7 @@ name = "telegram-bot"
 version = "0.1.0"
 description = "Zeta Telegram bot: thin client over the backend API"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = ["aiogram>=3.22,<4"]
 
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]
