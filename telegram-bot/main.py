@@ -12,6 +12,7 @@ from config import load_settings
 from handlers.auth import router as auth_router
 from handlers.health import router as health_router
 from handlers.homework import router as homework_router
+from handlers.questions import router as questions_router
 
 
 async def main_async() -> None:
@@ -21,6 +22,7 @@ async def main_async() -> None:
     dp.include_router(auth_router)
     dp.include_router(health_router)
     dp.include_router(homework_router)
+    dp.include_router(questions_router)
     await dp.start_polling(bot)
 
 
