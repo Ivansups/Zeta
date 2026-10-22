@@ -1,0 +1,20 @@
+[
+  {
+    "day_of_week": 1,
+    "start_time": "9:00",
+    "end_time": null,
+    "course": "second",
+    "direction": 90301,
+    "program": null,
+    "group": 211,
+    "subgroup": "one",
+    "subject": null,
+    "subject_id": 42,
+    "teacher": ["Иванов Иван Иванович"],
+    "room": 101,
+    "building": null,
+    "lesson_type": "unknown",
+    "week_parity": "odd",
+    "notes": "ФК"
+  }
+]
