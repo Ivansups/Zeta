@@ -77,8 +77,8 @@ async def db_session(
 def test_settings() -> Settings:
     return Settings(
         database_url=Settings().database_url,
-        telegram_bot_token="test-bot-token-123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
-        jwt_secret_key="test-secret-key-at-least-32-bytes-long-for-hs256-compliance",
+        telegram_bot_token="mock_bot_token_for_tests",
+        jwt_secret_key="mock_secret_key_at_least_32_bytes_long_for_tests",
         jwt_algorithm="HS256",
         access_token_expire_minutes=15,
         refresh_token_expire_days=30,
