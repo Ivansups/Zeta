@@ -84,6 +84,7 @@ jobs:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           TIME=$(TZ='Europe/Moscow' date +"%Y-%m-%d %H:%M MSK")
 
@@ -103,9 +104,10 @@ jobs:
           }
           PR_AUTHOR=$(who "$PR_AUTHOR")
           REPO_NAME=$(esc "$REPO_NAME"); HEAD_BRANCH=$(esc "$HEAD_BRANCH"); BASE_BRANCH=$(esc "$BASE_BRANCH"); PR_TITLE=$(esc "$PR_TITLE")
+          PR_LINK="<a href=\"${PR_URL}\">#${PR_NUMBER}</a>"
 
-          TEXT=$(printf '🚀 Открыт PR в main\n──────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nАвтор: %s\n\nPR: #%s — "%s"\n\n🕒 %s' \
-            "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$PR_AUTHOR" "$PR_NUMBER" "$PR_TITLE" "$TIME")
+          TEXT=$(printf '🚀 Открыт PR в main\n──────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nАвтор: %s\n\nPR: %s — "%s"\n\n🕒 %s' \
+            "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$PR_AUTHOR" "$PR_LINK" "$PR_TITLE" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" \
@@ -127,6 +129,7 @@ jobs:
           MERGED_BY: ${{ github.event.pull_request.merged_by.login }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           TIME=$(TZ='Europe/Moscow' date +"%Y-%m-%d %H:%M MSK")
@@ -148,9 +151,10 @@ jobs:
           }
           MERGED_BY=$(who "$MERGED_BY")
           REPO_NAME=$(esc "$REPO_NAME"); HEAD_BRANCH=$(esc "$HEAD_BRANCH"); BASE_BRANCH=$(esc "$BASE_BRANCH"); PR_TITLE=$(esc "$PR_TITLE")
+          PR_LINK="<a href=\"${PR_URL}\">#${PR_NUMBER}</a>"
 
-          TEXT=$(printf '✅ Merge в main\n──────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nСмержил: %s\n\nPR: #%s — "%s"\n\nКоммит: %s\n\n🕒 %s' \
-            "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$MERGED_BY" "$PR_NUMBER" "$PR_TITLE" "$SHORT_SHA" "$TIME")
+          TEXT=$(printf '✅ Merge в main\n──────────\n\nРепозиторий: %s\n\nВетка: %s → %s\n\nСмержил: %s\n\nPR: %s — "%s"\n\nКоммит: %s\n\n🕒 %s' \
+            "$REPO_NAME" "$HEAD_BRANCH" "$BASE_BRANCH" "$MERGED_BY" "$PR_LINK" "$PR_TITLE" "$SHORT_SHA" "$TIME")
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" \
