@@ -3,15 +3,31 @@ import {
   CalendarDays,
   GraduationCap,
   LayoutDashboard,
+  LogIn,
   Settings,
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+export type ShellUser = {
+  name: string;
+  role: string;
+  group: string;
+  initials?: string;
+};
+
 type AppShellProps = {
   active: "schedule" | "homework" | "admin" | "settings";
   children: ReactNode;
+  user?: ShellUser | null;
+};
+
+const defaultUser: ShellUser = {
+  name: "Данил Шелудько",
+  role: "Староста",
+  group: "ПИ-221",
+  initials: "ДШ",
 };
 
 const navigation = [
@@ -21,7 +37,7 @@ const navigation = [
   { id: "settings", href: "/settings", label: "Настройки", icon: Settings },
 ] as const;
 
-export function AppShell({ active, children }: AppShellProps): React.JSX.Element {
+export function AppShell({ active, children, user = defaultUser }: AppShellProps): React.JSX.Element {
   return (
     <div className="app-frame">
       <aside className="sidebar" aria-label="Основная навигация">
@@ -59,13 +75,23 @@ export function AppShell({ active, children }: AppShellProps): React.JSX.Element
             <span>7 учебная неделя</span>
           </div>
         </div>
-        <div className="profile-row">
-          <span className="avatar avatar-blue">ДШ</span>
-          <div>
-            <strong>Данил Шелудько</strong>
-            <span>Староста · ПИ-221</span>
+
+        {user ? (
+          <div className="profile-row">
+            <span className="avatar avatar-blue">{user.initials || user.name.slice(0, 2).toUpperCase()}</span>
+            <div>
+              <strong>{user.name}</strong>
+              <span>{user.role} · {user.group}</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="sidebar-login-prompt">
+            <Link className="sidebar-login-btn" href="/login">
+              <LogIn size={18} strokeWidth={2} />
+              <span>Войти через Telegram</span>
+            </Link>
+          </div>
+        )}
       </aside>
 
       <main className="app-content">{children}</main>
@@ -87,6 +113,16 @@ export function AppShell({ active, children }: AppShellProps): React.JSX.Element
             </Link>
           );
         })}
+        {!user ? (
+          <Link
+            className="mobile-login-link"
+            href="/login"
+            aria-label="Войти через Telegram"
+          >
+            <LogIn size={21} strokeWidth={1.9} />
+            <span>Вход</span>
+          </Link>
+        ) : null}
       </nav>
     </div>
   );
