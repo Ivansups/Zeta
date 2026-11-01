@@ -13,7 +13,7 @@ export interface TelegramUser {
 }
 
 export interface TelegramLoginButtonProps {
-  botUsername: string;
+  botUsername?: string;
   onAuth: (user: TelegramUser) => void;
   size?: "small" | "medium" | "large";
   cornerRadius?: number;
@@ -34,6 +34,11 @@ export function TelegramLoginButton({
   requestAccess = "write",
 }: TelegramLoginButtonProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
+  const isConfigured = Boolean(
+    botUsername &&
+      botUsername.trim() !== "" &&
+      botUsername !== "zeta_auth_bot",
+  );
 
   useEffect(() => {
     window.onTelegramAuth = (user: TelegramUser) => {
@@ -41,7 +46,7 @@ export function TelegramLoginButton({
     };
 
     const container = containerRef.current;
-    if (!container) {
+    if (!container || !isConfigured || !botUsername) {
       return;
     }
 
@@ -64,7 +69,21 @@ export function TelegramLoginButton({
         container.innerHTML = "";
       }
     };
-  }, [botUsername, onAuth, size, cornerRadius, requestAccess]);
+  }, [botUsername, isConfigured, onAuth, size, cornerRadius, requestAccess]);
+
+  if (!isConfigured) {
+    return (
+      <div
+        className="telegram-widget-unconfigured"
+        data-testid="telegram-widget-container"
+      >
+        <span className="unconfigured-label">Telegram Login Widget</span>
+        <small>
+          Укажите имя бота в <code>NEXT_PUBLIC_TELEGRAM_BOT_USERNAME</code>
+        </small>
+      </div>
+    );
+  }
 
   return (
     <div

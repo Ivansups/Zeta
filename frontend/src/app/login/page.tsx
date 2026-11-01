@@ -4,6 +4,7 @@ import {
   AlertCircle,
   ArrowRight,
   Check,
+  Code2,
   KeyRound,
   LoaderCircle,
   Send,
@@ -20,8 +21,7 @@ import {
 
 type LoginState = "idle" | "authenticating" | "confirmed" | "error";
 
-const BOT_USERNAME =
-  process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "zeta_auth_bot";
+const BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "";
 
 function LoginForm(): React.JSX.Element {
   const searchParams = useSearchParams();
@@ -69,6 +69,54 @@ function LoginForm(): React.JSX.Element {
     } catch (err: unknown) {
       setErrorMessage(
         err instanceof Error ? err.message : "Ошибка при авторизации через Telegram",
+      );
+      setState("error");
+    }
+  }
+
+  async function handleDevLogin(): Promise<void> {
+    try {
+      const authDate = Math.floor(Date.now() / 1000);
+      const data: Record<string, string | number> = {
+        auth_date: authDate,
+        first_name: "Иван",
+        id: 156587029,
+        last_name: "Климов",
+        username: "ivanklimov",
+      };
+      const checkString = Object.keys(data)
+        .sort()
+        .map((k) => `${k}=${data[k]}`)
+        .join("\n");
+
+      const enc = new TextEncoder();
+      const secretKeyHash = await crypto.subtle.digest(
+        "SHA-256",
+        enc.encode("mock-bot-token"),
+      );
+      const key = await crypto.subtle.importKey(
+        "raw",
+        secretKeyHash,
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+      );
+      const sig = await crypto.subtle.sign("HMAC", key, enc.encode(checkString));
+      const hash = Array.from(new Uint8Array(sig))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      await handleTelegramAuth({
+        id: Number(data.id),
+        first_name: String(data.first_name),
+        last_name: String(data.last_name),
+        username: String(data.username),
+        auth_date: Number(data.auth_date),
+        hash,
+      });
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Ошибка тестовой авторизации",
       );
       setState("error");
     }
@@ -131,6 +179,15 @@ function LoginForm(): React.JSX.Element {
                 size="large"
               />
             </div>
+
+            <button
+              type="button"
+              className="button button-secondary dev-login-btn"
+              onClick={handleDevLogin}
+            >
+              <Code2 size={16} />
+              <span>Войти в тестовом режиме (Dev Login)</span>
+            </button>
 
             <div className="privacy-note">
               <ShieldCheck size={17} />

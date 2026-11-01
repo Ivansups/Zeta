@@ -1,14 +1,59 @@
 services:
+  db:
+    image: postgres:17-alpine
+    container_name: zeta-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-zeta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zeta}
+      POSTGRES_DB: ${POSTGRES_DB:-zeta}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-zeta} -d $${POSTGRES_DB:-zeta}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zeta-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-zeta}:${POSTGRES_PASSWORD:-zeta}@db:5432/${POSTGRES_DB:-zeta}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-mock-bot-token}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-zeta-dev-secret-key-change-in-production-must-be-long-enough}
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      interval: 4s
+      timeout: 3s
+      retries: 10
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: zeta-frontend
     restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-zeta_auth_bot}
-      - API_URL=${API_URL:-http://localhost:8000}
+      - API_URL=http://backend:8000
+      - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
+
+volumes:
+  pgdata:
