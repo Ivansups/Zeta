@@ -8,4 +8,11 @@ describe("App", () => {
 
     expect(screen.getByText("Zeta")).toBeTruthy();
   });
+
+  it("shows schedule and group info for student", async () => {
+    await render(<App />);
+
+    expect(screen.getByText("Расписание группы")).toBeTruthy();
+    expect(screen.getByText("Понедельник")).toBeTruthy();
+  });
 });
