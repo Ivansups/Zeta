@@ -8,6 +8,7 @@ dependencies = [
     "asyncpg>=0.32.0",
     "fastapi>=0.156.4",
     "pydantic-settings>=2.16.1",
+    "pyjwt[crypto]>=2.9.0",
     "sqlalchemy[asyncio]>=2.1.5",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -24,7 +25,7 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S105", "S106", "RUF001", "RUF003"]
 "migrations/versions/*" = ["I001"]
 
 [tool.mypy]
