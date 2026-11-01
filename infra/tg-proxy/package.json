@@ -1,0 +1,17 @@
+{
+  "name": "zeta-tg-proxy",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker reverse proxy for Telegram Bot API",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "deploy": "node deploy.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.156.0"
+  }
+}
