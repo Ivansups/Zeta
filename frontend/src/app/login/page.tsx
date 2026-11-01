@@ -22,6 +22,9 @@ import {
 type LoginState = "idle" | "authenticating" | "confirmed" | "error";
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "";
+const SHOW_DEV_LOGIN =
+  process.env.NODE_ENV !== "production" ||
+  process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === "true";
 
 function LoginForm(): React.JSX.Element {
   const searchParams = useSearchParams();
@@ -180,14 +183,16 @@ function LoginForm(): React.JSX.Element {
               />
             </div>
 
-            <button
-              type="button"
-              className="button button-secondary dev-login-btn"
-              onClick={handleDevLogin}
-            >
-              <Code2 size={16} />
-              <span>Войти в тестовом режиме (Dev Login)</span>
-            </button>
+            {SHOW_DEV_LOGIN ? (
+              <button
+                type="button"
+                className="button button-secondary dev-login-btn"
+                onClick={handleDevLogin}
+              >
+                <Code2 size={16} />
+                <span>Войти в тестовом режиме (Dev Login)</span>
+              </button>
+            ) : null}
 
             <div className="privacy-note">
               <ShieldCheck size={17} />
