@@ -48,6 +48,8 @@ def validate_telegram_widget_data(
     current_timestamp = int(time.time())
     if current_timestamp - auth_timestamp > max_age_seconds:
         raise ValueError("Telegram auth_date is expired")
+    if auth_timestamp > current_timestamp + 300:
+        raise ValueError("Telegram auth_date is in the future")
 
     # Формируем data_check_string
     check_items = []
@@ -97,6 +99,8 @@ def validate_telegram_webapp_init_data(
     current_timestamp = int(time.time())
     if current_timestamp - auth_timestamp > max_age_seconds:
         raise ValueError("Telegram Mini App initData is expired")
+    if auth_timestamp > current_timestamp + 300:
+        raise ValueError("Telegram Mini App initData is in the future")
 
     check_items = []
     for k, v in parsed_pairs.items():

@@ -92,7 +92,7 @@ class AuthService:
             ip_address=ip_address,
         )
         self.session.add(audit)
-        await self.session.flush()
+        await self.session.commit()
 
         access_token = create_access_token(
             subject=str(user.id),
@@ -134,6 +134,9 @@ class AuthService:
         user.role = invite.role
         if invite.subgroup_number is not None:
             user.subgroup_number = invite.subgroup_number
+
+        # Invalidate any existing JWT sessions if user's role changed
+        user.token_version += 1
 
         invite.activations_count += 1
         if invite.is_single_use:
@@ -184,7 +187,8 @@ class AuthService:
                 ip_address=ip_address,
             )
             self.session.add(audit)
-            await self.session.flush()
+            # Guarantee revocation and security alert persist in DB even on error
+            await self.session.commit()
 
             raise PermissionError(
                 "Compromised token reuse detected: all sessions revoked"
@@ -193,7 +197,7 @@ class AuthService:
         now = datetime.now(UTC)
         if token_record.expires_at <= now:
             token_record.is_revoked = True
-            await self.session.flush()
+            await self.session.commit()
             raise PermissionError("Refresh token expired")
 
         token_record.is_revoked = True
@@ -223,7 +227,7 @@ class AuthService:
             ip_address=ip_address,
         )
         self.session.add(audit)
-        await self.session.flush()
+        await self.session.commit()
 
         new_access_token = create_access_token(
             subject=str(user.id),
@@ -265,7 +269,7 @@ class AuthService:
             ip_address=ip_address,
         )
         self.session.add(audit)
-        await self.session.flush()
+        await self.session.commit()
 
     async def create_group_self_service(
         self,
@@ -294,7 +298,7 @@ class AuthService:
             details=f"Self-service group created: '{name}'",
         )
         self.session.add(audit)
-        await self.session.flush()
+        await self.session.commit()
         return group
 
     async def create_invite(
@@ -329,7 +333,7 @@ class AuthService:
             ),
         )
         self.session.add(audit)
-        await self.session.flush()
+        await self.session.commit()
         return invite, raw_token
 
     async def revoke_invite(self, user: User, invite_id: uuid.UUID) -> None:
@@ -349,4 +353,4 @@ class AuthService:
             details=f"Revoked invite id={invite_id}",
         )
         self.session.add(audit)
-        await self.session.flush()
+        await self.session.commit()

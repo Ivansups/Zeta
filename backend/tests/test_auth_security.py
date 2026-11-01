@@ -121,6 +121,13 @@ def test_validate_telegram_widget_data_expired() -> None:
         validate_telegram_widget_data(data, BOT_TOKEN, max_age_seconds=86400)
 
 
+def test_validate_telegram_widget_data_future() -> None:
+    future_date = int(time.time()) + 1000
+    data = make_valid_widget_data(auth_date=future_date)
+    with pytest.raises(ValueError, match="Telegram auth_date is in the future"):
+        validate_telegram_widget_data(data, BOT_TOKEN)
+
+
 def test_validate_telegram_webapp_init_data_success() -> None:
     init_data = make_valid_webapp_init_data()
     user_data = validate_telegram_webapp_init_data(init_data, BOT_TOKEN)
@@ -151,6 +158,13 @@ def test_validate_telegram_webapp_init_data_expired() -> None:
     init_data = make_valid_webapp_init_data(auth_date=expired_date)
     with pytest.raises(ValueError, match="Telegram Mini App initData is expired"):
         validate_telegram_webapp_init_data(init_data, BOT_TOKEN, max_age_seconds=86400)
+
+
+def test_validate_telegram_webapp_init_data_future() -> None:
+    future_date = int(time.time()) + 1000
+    init_data = make_valid_webapp_init_data(auth_date=future_date)
+    with pytest.raises(ValueError, match="Telegram Mini App initData is in the future"):
+        validate_telegram_webapp_init_data(init_data, BOT_TOKEN)
 
 
 def test_validate_telegram_webapp_init_data_invalid_user_json() -> None:

@@ -7,8 +7,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth.models import RefreshToken
+from backend.auth.models import RefreshToken, User
 from backend.config import Settings
+from backend.db.session import create_session_factory
 
 
 def make_widget_auth_data(
@@ -321,3 +322,24 @@ async def test_invites_flow_student_helper_curator(
     failed_login = await client.post("/auth/telegram/widget", json=helper_data)
     assert failed_login.status_code == 400
     assert "revoked" in failed_login.json()["detail"]
+
+
+async def test_transaction_commits_persisted_to_independent_session(
+    client: AsyncClient, test_database_url: str, test_settings: Settings
+) -> None:
+    """Verify that changes made during requests are truly committed to the DB."""
+    data = make_widget_auth_data(
+        telegram_id=8888, bot_token=test_settings.telegram_bot_token
+    )
+    resp = await client.post("/auth/telegram/widget", json=data)
+    assert resp.status_code == 200
+
+    # Open a completely distinct, independent session
+    factory = create_session_factory(test_database_url)
+    async with factory() as independent_session:
+        user_res = await independent_session.execute(
+            select(User).where(User.telegram_id == 8888)
+        )
+        persisted_user = user_res.scalar_one_or_none()
+        assert persisted_user is not None
+        assert persisted_user.telegram_id == 8888
