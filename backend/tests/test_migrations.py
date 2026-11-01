@@ -18,3 +18,5 @@ def alembic_config(test_database_url: str) -> Config:
 def test_upgrade_head_and_downgrade_base(alembic_config: Config) -> None:
     command.upgrade(alembic_config, "head")
     command.downgrade(alembic_config, "base")
+    # Restore head for subsequent tests
+    command.upgrade(alembic_config, "head")
