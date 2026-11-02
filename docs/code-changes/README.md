@@ -4,3 +4,4 @@
 
 | Дата | Change ID | Пакеты | Итерация | Описание | Документ |
 |---|---|---|---|---|---|
+| 2026-11-02 | bot-scaffold-and-onboarding | telegram-bot | Итерация 1 (20.10–03.11) | Каркас Telegram-бота, long polling и онбординг (/start, /help) | [2026-11-02-bot-scaffold-and-onboarding.md](./2026-11-02-bot-scaffold-and-onboarding.md) |
