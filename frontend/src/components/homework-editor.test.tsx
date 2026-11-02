@@ -118,6 +118,89 @@ describe("HomeworkEditor", () => {
     });
   });
 
+  it("validates empty prompt in assistant mode", async () => {
+    const user = userEvent.setup();
+    const onSave = jest.fn();
+
+    render(
+      <HomeworkEditor
+        open
+        initialMode="assistant"
+        onClose={jest.fn()}
+        onSave={onSave}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Разобрать текст|Распознать с AI/i }));
+    expect(screen.getByText("Введите текст задания для разбора")).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("parses free text with AI into structured draft preview with auto-selected subject and date", async () => {
+    const user = userEvent.setup();
+    const onSave = jest.fn();
+
+    render(
+      <HomeworkEditor
+        open
+        initialMode="assistant"
+        onClose={jest.fn()}
+        onSave={onSave}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Текст для разбора"),
+      "по матану решить номера 12–18 к четвергу",
+    );
+    await user.click(screen.getByRole("button", { name: /Разобрать текст|Распознать с AI/i }));
+
+    // Preview shows recognized draft
+    expect(screen.getByRole("heading", { name: "Предпросмотр черновика" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Пара")).toHaveValue("math-2026-10-15");
+    expect(screen.getByLabelText("Дата сдачи")).toHaveValue("2026-10-15");
+    expect(screen.getByLabelText("Описание задания")).toHaveValue("решить номера 12–18");
+  });
+
+  it("allows editing the AI-recognized draft before saving to schedule", async () => {
+    const user = userEvent.setup();
+    const onSave = jest.fn();
+
+    render(
+      <HomeworkEditor
+        open
+        initialMode="assistant"
+        onClose={jest.fn()}
+        onSave={onSave}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Текст для разбора"),
+      "по матану решить номера 12–18 к четвергу",
+    );
+    await user.click(screen.getByRole("button", { name: /Разобрать текст|Распознать с AI/i }));
+
+    // Edit fields in preview
+    const descriptionInput = screen.getByLabelText("Описание задания");
+    await user.clear(descriptionInput);
+    await user.type(descriptionInput, "решить номера 12–18 и повторить теорию");
+
+    const dueDateInput = screen.getByLabelText("Дата сдачи");
+    await user.clear(dueDateInput);
+    await user.type(dueDateInput, "2026-10-22");
+
+    // Save to schedule
+    await user.click(screen.getByRole("button", { name: "Сохранить в расписание" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      lessonId: "math-2026-10-15",
+      subgroup: "all",
+      dueDate: "2026-10-22",
+      description: "решить номера 12–18 и повторить теорию",
+    });
+  });
+
   it("calls onClose when cancel button is clicked", async () => {
     const user = userEvent.setup();
     const onClose = jest.fn();

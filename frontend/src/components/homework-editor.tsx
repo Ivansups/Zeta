@@ -1,13 +1,15 @@
 "use client";
 
-import { Sparkles, X } from "lucide-react";
+import { ArrowLeft, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 
+import { parseHomeworkPrompt } from "@/lib/llm-parser";
 import { lessons } from "@/lib/mock-data";
 import type { HomeworkDraft, Subgroup } from "@/lib/types";
 
 type HomeworkEditorProps = {
   open: boolean;
+  initialMode?: "form" | "assistant";
   initialData?: {
     id?: string;
     lessonId?: string;
@@ -20,12 +22,15 @@ type HomeworkEditorProps = {
 };
 
 function HomeworkEditorForm({
+  initialMode = "form",
   initialData,
   onClose,
   onSave,
 }: Omit<HomeworkEditorProps, "open">): React.JSX.Element {
   const isEdit = Boolean(initialData?.id);
-  const [mode, setMode] = useState<"form" | "assistant">("form");
+  const [mode, setMode] = useState<"form" | "assistant">(initialMode);
+  const [assistantStage, setAssistantStage] = useState<"input" | "preview">("input");
+  const [assistantPrompt, setAssistantPrompt] = useState("");
 
   const defaultLesson =
     lessons.find((lesson) => lesson.id === initialData?.lessonId) ?? lessons[0];
@@ -38,12 +43,18 @@ function HomeworkEditorForm({
     initialData?.dueDate ?? defaultLesson.date,
   );
   const [description, setDescription] = useState(initialData?.description ?? "");
-  const [errors, setErrors] = useState<{ description?: string; dueDate?: string }>({});
+  const [errors, setErrors] = useState<{
+    description?: string;
+    dueDate?: string;
+    assistantPrompt?: string;
+  }>({});
 
   const selectedLesson = lessons.find((lesson) => lesson.id === lessonId) ?? lessons[0];
 
   function resetAndClose(): void {
     setMode("form");
+    setAssistantStage("input");
+    setAssistantPrompt("");
     setDescription("");
     setErrors({});
     onClose();
@@ -62,15 +73,36 @@ function HomeworkEditorForm({
     }
   }
 
+  function handleAssistantParse(): void {
+    if (!assistantPrompt.trim()) {
+      setErrors({ assistantPrompt: "Введите текст задания для разбора" });
+      return;
+    }
+
+    const parsed = parseHomeworkPrompt(assistantPrompt, lessons);
+    setLessonId(parsed.lessonId);
+    setSubgroup(parsed.subgroup ?? "all");
+    setDueDate(parsed.dueDate);
+    setDescription(parsed.description);
+    setAssistantStage("preview");
+    setErrors({});
+  }
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+
+    if (mode === "assistant" && assistantStage === "input") {
+      handleAssistantParse();
+      return;
+    }
+
     const newErrors: { description?: string; dueDate?: string } = {};
 
     if (!description.trim()) {
       newErrors.description = "Добавьте описание задания";
     }
 
-    if (mode === "form" && !dueDate.trim()) {
+    if (!dueDate.trim()) {
       newErrors.dueDate = "Укажите дату сдачи";
     }
 
@@ -100,10 +132,20 @@ function HomeworkEditorForm({
       >
         <header className="modal-header">
           <div>
-            <p className="eyebrow">{isEdit ? "Редактирование" : "Новое задание"}</p>
+            <p className="eyebrow">
+              {mode === "assistant"
+                ? assistantStage === "preview"
+                  ? "Распознано с Zeta AI"
+                  : "Zeta AI"
+                : isEdit
+                  ? "Редактирование"
+                  : "Новое задание"}
+            </p>
             <h2 id="homework-editor-title">
               {mode === "assistant"
-                ? "Черновик с Zeta AI"
+                ? assistantStage === "preview"
+                  ? "Предпросмотр черновика"
+                  : "Черновик с Zeta AI"
                 : isEdit
                   ? "Редактировать ДЗ"
                   : "Создать ДЗ"}
@@ -118,14 +160,20 @@ function HomeworkEditorForm({
           <button
             className={mode === "form" ? "is-active" : ""}
             type="button"
-            onClick={() => setMode("form")}
+            onClick={() => {
+              setMode("form");
+              setErrors({});
+            }}
           >
             Вручную
           </button>
           <button
             className={mode === "assistant" ? "is-active" : ""}
             type="button"
-            onClick={() => setMode("assistant")}
+            onClick={() => {
+              setMode("assistant");
+              setErrors({});
+            }}
           >
             <Sparkles size={15} />
             С помощником
@@ -133,8 +181,58 @@ function HomeworkEditorForm({
         </div>
 
         <form className="editor-form" onSubmit={handleSubmit}>
-          {mode === "form" ? (
+          {mode === "assistant" && assistantStage === "input" ? (
             <>
+              <div className="assistant-note">
+                <Sparkles size={18} />
+                <p>Опишите задание своими словами. Языковая модель распознает предмет, дату и задание.</p>
+              </div>
+              <label className="field-label" htmlFor="assistant-prompt">
+                Текст для разбора
+              </label>
+              <textarea
+                id="assistant-prompt"
+                value={assistantPrompt}
+                onChange={(event) => {
+                  setAssistantPrompt(event.target.value);
+                  setErrors((prev) => ({ ...prev, assistantPrompt: undefined }));
+                }}
+                placeholder="Например: по матану решить номера 12–18 к четвергу"
+                rows={6}
+                aria-describedby={errors.assistantPrompt ? "assistant-prompt-error" : undefined}
+              />
+              {errors.assistantPrompt ? (
+                <p className="field-error" id="assistant-prompt-error" role="alert">
+                  {errors.assistantPrompt}
+                </p>
+              ) : null}
+
+              <div className="modal-actions">
+                <button className="button button-secondary" type="button" onClick={resetAndClose}>
+                  Отмена
+                </button>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={handleAssistantParse}
+                >
+                  <Sparkles size={16} />
+                  Разобрать текст
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {mode === "assistant" && assistantStage === "preview" ? (
+                <div className="assistant-preview-banner">
+                  <Sparkles size={18} />
+                  <div>
+                    <strong>Черновик распознан Zeta AI</strong>
+                    <p>Проверьте распознанные поля и отредактируйте перед сохранением в расписание.</p>
+                  </div>
+                </div>
+              ) : null}
+
               <label className="field-label" htmlFor="lesson">
                 Пара
               </label>
@@ -209,48 +307,37 @@ function HomeworkEditorForm({
                 rows={5}
                 aria-describedby={errors.description ? "description-error" : undefined}
               />
-            </>
-          ) : (
-            <>
-              <div className="assistant-note">
-                <Sparkles size={18} />
-                <p>Опишите задание своими словами. Черновик появится перед сохранением.</p>
+              {errors.description ? (
+                <p className="field-error" id="description-error" role="alert">
+                  {errors.description}
+                </p>
+              ) : null}
+
+              <div className="modal-actions">
+                {mode === "assistant" && assistantStage === "preview" ? (
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={() => setAssistantStage("input")}
+                  >
+                    <ArrowLeft size={16} />
+                    Назад к вводу
+                  </button>
+                ) : (
+                  <button className="button button-secondary" type="button" onClick={resetAndClose}>
+                    Отмена
+                  </button>
+                )}
+                <button className="button button-primary" type="submit">
+                  {mode === "assistant"
+                    ? "Сохранить в расписание"
+                    : isEdit
+                      ? "Сохранить изменения"
+                      : "Сохранить ДЗ"}
+                </button>
               </div>
-              <label className="field-label" htmlFor="description">
-                Текст для разбора
-              </label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(event) => {
-                  setDescription(event.target.value);
-                  setErrors((prev) => ({ ...prev, description: undefined }));
-                }}
-                placeholder="Например: по матану решить номера 12–18 к четвергу"
-                rows={7}
-                aria-describedby={errors.description ? "description-error" : undefined}
-              />
             </>
           )}
-
-          {errors.description ? (
-            <p className="field-error" id="description-error" role="alert">
-              {errors.description}
-            </p>
-          ) : null}
-
-          <div className="modal-actions">
-            <button className="button button-secondary" type="button" onClick={resetAndClose}>
-              Отмена
-            </button>
-            <button className="button button-primary" type="submit">
-              {mode === "assistant"
-                ? "Создать черновик"
-                : isEdit
-                  ? "Сохранить изменения"
-                  : "Сохранить ДЗ"}
-            </button>
-          </div>
         </form>
       </section>
     </div>
@@ -259,6 +346,7 @@ function HomeworkEditorForm({
 
 export function HomeworkEditor({
   open,
+  initialMode,
   initialData,
   onClose,
   onSave,
@@ -267,11 +355,12 @@ export function HomeworkEditor({
     return null;
   }
 
-  const key = `${initialData?.id ?? "new"}-${initialData?.lessonId ?? "default"}`;
+  const key = `${initialMode ?? "form"}-${initialData?.id ?? "new"}-${initialData?.lessonId ?? "default"}`;
 
   return (
     <HomeworkEditorForm
       key={key}
+      initialMode={initialMode}
       initialData={initialData}
       onClose={onClose}
       onSave={onSave}
