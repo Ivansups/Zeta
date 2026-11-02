@@ -13,6 +13,10 @@ COPY src ./src
 
 RUN uv sync --frozen --no-dev --no-cache
 
+RUN useradd -u 10001 -m appuser && chown -R appuser:appuser /app
+
+USER appuser
+
 EXPOSE 8000
 
 CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000"]
