@@ -92,6 +92,7 @@ export function ScheduleDashboard(): React.JSX.Element {
   const [lessonList, setLessonList] = useState<Lesson[]>(lessons);
   const [editorState, setEditorState] = useState<{
     open: boolean;
+    mode?: "form" | "assistant";
     initialData?: {
       id?: string;
       lessonId?: string;
@@ -99,7 +100,7 @@ export function ScheduleDashboard(): React.JSX.Element {
       description?: string;
       dueDate?: string;
     } | null;
-  }>({ open: false, initialData: null });
+  }>({ open: false, mode: "form", initialData: null });
   const [savedMessage, setSavedMessage] = useState("");
 
   useEffect(() => {
@@ -119,6 +120,7 @@ export function ScheduleDashboard(): React.JSX.Element {
   function handleAddHomework(lesson: Lesson): void {
     setEditorState({
       open: true,
+      mode: "form",
       initialData: {
         lessonId: lesson.id,
         subgroup: lesson.subgroup,
@@ -134,6 +136,7 @@ export function ScheduleDashboard(): React.JSX.Element {
     }
     setEditorState({
       open: true,
+      mode: "form",
       initialData: {
         id: lesson.homework.id,
         lessonId: lesson.id,
@@ -165,7 +168,7 @@ export function ScheduleDashboard(): React.JSX.Element {
     );
 
     const lesson = lessonList.find((item) => item.id === draft.lessonId);
-    setEditorState({ open: false, initialData: null });
+    setEditorState({ open: false, mode: "form", initialData: null });
     const message = isEdit
       ? `Задание для «${lesson?.subject ?? "пары"}» обновлено`
       : `Задание для «${lesson?.subject ?? "пары"}» сохранено`;
@@ -184,7 +187,7 @@ export function ScheduleDashboard(): React.JSX.Element {
           <button
             className="button button-secondary assistant-button"
             type="button"
-            onClick={() => setEditorState({ open: true, initialData: null })}
+            onClick={() => setEditorState({ open: true, mode: "assistant", initialData: null })}
           >
             <Sparkles size={16} strokeWidth={1.8} />
             Zeta AI
@@ -192,7 +195,7 @@ export function ScheduleDashboard(): React.JSX.Element {
           <button
             className="button button-primary"
             type="button"
-            onClick={() => setEditorState({ open: true, initialData: null })}
+            onClick={() => setEditorState({ open: true, mode: "form", initialData: null })}
           >
             <Plus size={16} strokeWidth={2} />
             Добавить ДЗ
@@ -344,8 +347,9 @@ export function ScheduleDashboard(): React.JSX.Element {
       {savedMessage ? <div className="toast" role="status">{savedMessage}</div> : null}
       <HomeworkEditor
         open={editorState.open}
+        initialMode={editorState.mode}
         initialData={editorState.initialData}
-        onClose={() => setEditorState({ open: false, initialData: null })}
+        onClose={() => setEditorState({ open: false, mode: "form", initialData: null })}
         onSave={handleSave}
       />
     </div>

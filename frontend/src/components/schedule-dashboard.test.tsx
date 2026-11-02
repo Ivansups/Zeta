@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { ScheduleDashboard } from "./schedule-dashboard";
 
-describe("ScheduleDashboard - S-06 Homework Integration", () => {
+describe("ScheduleDashboard - S-06 & S-11 Homework Integration", () => {
   it("allows adding homework from lesson card and updates UI optimistically with toast", async () => {
     const user = userEvent.setup();
 
@@ -91,6 +91,43 @@ describe("ScheduleDashboard - S-06 Homework Integration", () => {
     // Toast indicates update
     expect(screen.getByRole("status")).toHaveTextContent(
       "Задание для «Математический анализ» обновлено",
+    );
+  });
+
+  it("opens Zeta AI assistant mode from header and saves parsed homework", async () => {
+    const user = userEvent.setup();
+
+    render(<ScheduleDashboard />);
+
+    // Click Zeta AI button in header
+    const aiButton = screen.getByRole("button", { name: /Zeta AI/i });
+    await user.click(aiButton);
+
+    // Modal opens directly in assistant mode
+    expect(screen.getByRole("heading", { name: "Черновик с Zeta AI" })).toBeInTheDocument();
+    const promptInput = screen.getByLabelText("Текст для разбора");
+    await user.type(promptInput, "по английскому подготовить презентацию к пятнице");
+
+    await user.click(screen.getByRole("button", { name: "Разобрать текст" }));
+
+    // Preview
+    expect(screen.getByRole("heading", { name: "Предпросмотр черновика" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Пара")).toHaveValue("english-2026-10-15");
+    expect(screen.getByLabelText("Дата сдачи")).toHaveValue("2026-10-16");
+    expect(screen.getByLabelText("Описание задания")).toHaveValue("подготовить презентацию");
+
+    // Save to schedule
+    await user.click(screen.getByRole("button", { name: "Сохранить в расписание" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Verify optimistic update on English lesson card
+    const englishHeading = screen.getByRole("heading", { name: "Английский язык" });
+    const englishCard = englishHeading.closest("article")!;
+    expect(within(englishCard).getByText("подготовить презентацию")).toBeInTheDocument();
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Задание для «Английский язык» сохранено",
     );
   });
 });
