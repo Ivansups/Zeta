@@ -2,11 +2,14 @@ version: 2
 
 # `cooldown` delays brand-new releases, which is the main defence against
 # freshly published malicious versions.
+# `open-pull-requests-limit: 0` disables automated PR generation from Dependabot.
+# Vulnerability checks run via CI security workflows (Trivy, OSV-Scanner, dependency-review).
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 7
     groups:
@@ -17,6 +20,7 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 7
     groups:
@@ -27,6 +31,7 @@ updates:
     directory: /telegram-bot
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 7
     groups:
@@ -37,6 +42,7 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 7
     groups:
@@ -47,6 +53,7 @@ updates:
     directory: /mobile
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 7
     groups:
@@ -57,5 +64,6 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 7

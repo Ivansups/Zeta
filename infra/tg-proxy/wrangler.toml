@@ -1,0 +1,11 @@
+name = "zeta-tg-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+[vars]
+TELEGRAM_API_BASE = "https://api.telegram.org"
+# Единственный разрешённый статический IP вашего сервера:
+# ALLOWED_IP = "185.xxx.xxx.xxx"
+
+# Опционально: секретный ключ (заголовок X-Proxy-Secret)
+# PROXY_SECRET = "your-secret-key-here"

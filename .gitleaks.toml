@@ -1,0 +1,7 @@
+[allowlist]
+description = "Allow test fixtures and test files"
+paths = [
+    '''(^|/)tests/.*''',
+    '''(^|/)__tests__/.*''',
+    '''\.(spec|test)\.[a-zA-Z0-9]+$''',
+]
