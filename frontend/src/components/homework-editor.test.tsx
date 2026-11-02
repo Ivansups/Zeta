@@ -10,12 +10,10 @@ describe("HomeworkEditor", () => {
 
     render(<HomeworkEditor open onClose={jest.fn()} onSave={onSave} />);
 
-    // Click submit with empty form
     await user.click(screen.getByRole("button", { name: "Сохранить ДЗ" }));
     expect(screen.getByText("Добавьте описание задания")).toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
 
-    // Type only whitespace
     await user.type(screen.getByLabelText("Описание задания"), "   \n  \t  ");
     await user.click(screen.getByRole("button", { name: "Сохранить ДЗ" }));
     expect(screen.getByText("Добавьте описание задания")).toBeInTheDocument();
@@ -46,18 +44,13 @@ describe("HomeworkEditor", () => {
 
     render(<HomeworkEditor open onClose={jest.fn()} onSave={onSave} />);
 
-    // Select lesson
     await user.selectOptions(screen.getByLabelText("Пара"), "python-2026-10-15");
-
-    // Select subgroup
     await user.selectOptions(screen.getByLabelText("Подгруппа"), "1");
 
-    // Enter due date
     const dueDateInput = screen.getByLabelText("Дата сдачи");
     await user.clear(dueDateInput);
     await user.type(dueDateInput, "2026-10-22");
 
-    // Enter description
     await user.type(
       screen.getByLabelText("Описание задания"),
       "Решить задачи 12–18 из практикума",
@@ -94,7 +87,6 @@ describe("HomeworkEditor", () => {
       />,
     );
 
-    // Title indicates editing mode
     expect(screen.getByRole("heading", { name: "Редактировать ДЗ" })).toBeInTheDocument();
 
     const descriptionInput = screen.getByLabelText("Описание задания");
@@ -103,7 +95,6 @@ describe("HomeworkEditor", () => {
     const dueDateInput = screen.getByLabelText("Дата сдачи");
     expect(dueDateInput).toHaveValue("2026-10-23");
 
-    // Modify description
     await user.clear(descriptionInput);
     await user.type(descriptionInput, "Обновлённое задание по дискретной математике");
 
@@ -155,7 +146,6 @@ describe("HomeworkEditor", () => {
     );
     await user.click(screen.getByRole("button", { name: /Разобрать текст|Распознать с AI/i }));
 
-    // Preview shows recognized draft
     expect(screen.getByRole("heading", { name: "Предпросмотр черновика" })).toBeInTheDocument();
     expect(screen.getByLabelText("Пара")).toHaveValue("math-2026-10-15");
     expect(screen.getByLabelText("Дата сдачи")).toHaveValue("2026-10-15");
@@ -181,7 +171,6 @@ describe("HomeworkEditor", () => {
     );
     await user.click(screen.getByRole("button", { name: /Разобрать текст|Распознать с AI/i }));
 
-    // Edit fields in preview
     const descriptionInput = screen.getByLabelText("Описание задания");
     await user.clear(descriptionInput);
     await user.type(descriptionInput, "решить номера 12–18 и повторить теорию");
@@ -190,7 +179,6 @@ describe("HomeworkEditor", () => {
     await user.clear(dueDateInput);
     await user.type(dueDateInput, "2026-10-22");
 
-    // Save to schedule
     await user.click(screen.getByRole("button", { name: "Сохранить в расписание" }));
 
     expect(onSave).toHaveBeenCalledWith({

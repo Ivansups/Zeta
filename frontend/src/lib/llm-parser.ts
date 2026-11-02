@@ -58,7 +58,6 @@ export function parseHomeworkPrompt(
 ): ParsedHomeworkResult {
   const normalized = prompt.toLowerCase();
 
-  // 1. Match Subject
   let matchedLesson: Lesson | undefined;
 
   for (const entry of SUBJECT_ALIASES) {
@@ -79,7 +78,6 @@ export function parseHomeworkPrompt(
       ) ?? availableLessons[0];
   }
 
-  // 2. Match Subgroup
   let subgroup: Subgroup | "all" = matchedLesson.subgroup;
   if (/(\b1\s*подгрупп|подгрупп[а-я]*\s*1|перв[а-я]*\s*подгрупп)/i.test(normalized)) {
     subgroup = 1;
@@ -89,7 +87,6 @@ export function parseHomeworkPrompt(
     subgroup = "all";
   }
 
-  // 3. Match Due Date
   let dueDate: string | undefined;
 
   const isoMatch = normalized.match(/\b\d{4}-\d{2}-\d{2}\b/);
@@ -108,7 +105,6 @@ export function parseHomeworkPrompt(
     dueDate = matchedLesson.date;
   }
 
-  // 4. Clean description
   let cleaned = prompt
     .replace(/(?:для\s*)?(?:[12]\s*подгрупп[а-я]*|вся\s*группа|для\s*всех)/gi, "")
     .replace(/(?:по\s*)?(?:матану?|математике?|питону?|python|алгоритмам?|аисд|английскому?|english|дискретной\s*математике?|дискретке?|истории?)/gi, "")
