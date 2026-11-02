@@ -905,6 +905,34 @@ a {
   margin-top: 2px;
 }
 
+.homework-inline-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.homework-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.homework-edit-btn {
+  background: none;
+  border: none;
+  color: var(--card-accent);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  transition: background-color var(--duration-fast) var(--ease-spring);
+}
+
+.homework-edit-btn:hover {
+  background: color-mix(in srgb, var(--card-accent) 15%, transparent);
+}
+
 .homework-inline strong {
   display: block;
   color: var(--card-accent);
@@ -919,10 +947,39 @@ a {
   color: var(--foreground);
 }
 
+.lesson-homework-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.lesson-add-hw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-spring);
+}
+
+.lesson-add-hw-btn:hover {
+  background: var(--surface);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .no-homework {
   color: var(--muted-soft);
   font-size: 13px;
-  margin: 12px 0 0;
+  margin: 0;
   font-style: normal;
 }
 
