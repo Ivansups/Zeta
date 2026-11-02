@@ -24,17 +24,17 @@ function HomeworkCard({ lesson }: { lesson: Lesson }): React.JSX.Element {
     <article className={`homework-card accent-${lesson.accent}`}>
       <div className="homework-card-topline">
         <span className="homework-kind">{lesson.kind}</span>
-        <span className="homework-date"><Clock3 size={14} />{lesson.time}</span>
+        <span className="homework-date"><Clock3 size={13} strokeWidth={1.8} />{lesson.time}</span>
       </div>
       <h3>{lesson.subject}</h3>
       <p className="homework-description">{lesson.homework?.description}</p>
-      <p className="homework-location"><MapPin size={14} />{lesson.location}</p>
+      <p className="homework-location"><MapPin size={13} strokeWidth={1.8} />{lesson.location}</p>
       <div className="homework-card-footer">
         <span className="homework-subgroup">
           {lesson.subgroup === "all" ? "Вся группа" : `Подгруппа ${lesson.subgroup}`}
         </span>
         <Link className="homework-link" href={`/?lesson=${lesson.id}`}>
-          К паре <ChevronRight size={15} />
+          К паре <ChevronRight size={14} strokeWidth={2} />
         </Link>
       </div>
     </article>

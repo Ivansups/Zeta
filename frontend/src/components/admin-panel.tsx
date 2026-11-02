@@ -57,66 +57,61 @@ function InviteCard({
   const { subgroup, link } = invitation;
 
   return (
-    <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start gap-3">
-        <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700"
-          aria-hidden="true"
-        >
-          <UserRound size={20} strokeWidth={1.9} />
+    <article className="invite-card">
+      <div className="invite-card-header">
+        <span className="invite-card-icon" aria-hidden="true">
+          <UserRound size={20} strokeWidth={1.75} />
         </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-zinc-950">Подгруппа {subgroup}</h2>
-          <p className="mt-1 text-sm leading-5 text-zinc-500">
-            Многоразовая ссылка для студентов подгруппы
-          </p>
+        <div>
+          <h2>Подгруппа {subgroup}</h2>
+          <p>Многоразовая ссылка для студентов подгруппы</p>
         </div>
       </div>
 
       {link ? (
-        <div className="mt-5">
+        <div style={{ marginTop: "16px" }}>
           <label className="sr-only" htmlFor={`invite-${subgroup}`}>
             Ссылка для подгруппы {subgroup}
           </label>
-          <div className="flex min-w-0 items-stretch rounded-lg border border-zinc-200 bg-zinc-50 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+          <div className="invite-input-row">
             <input
-              className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-zinc-700 outline-none"
               id={`invite-${subgroup}`}
               readOnly
               value={link}
             />
             <button
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center self-center text-zinc-500 transition-colors hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="invite-input-copy-btn"
               type="button"
               aria-label={`Копировать ссылку для подгруппы ${subgroup}`}
               title="Копировать ссылку"
               onClick={() => onCopy(subgroup, link)}
             >
-              <Copy size={18} aria-hidden="true" />
+              <Copy size={17} aria-hidden="true" />
             </button>
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+          <div className="invite-meta-row">
+            <span className="invite-active-badge">
               <Check size={15} aria-hidden="true" />
               Ссылка активна
             </span>
             <button
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              className="invite-revoke-btn"
               type="button"
               onClick={() => onRevoke(subgroup)}
             >
-              <RefreshCw size={16} aria-hidden="true" />
+              <RefreshCw size={15} aria-hidden="true" />
               Отозвать ссылку для подгруппы {subgroup}
             </button>
           </div>
         </div>
       ) : (
         <button
-          className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          className="button button-primary"
+          style={{ width: "100%", marginTop: "20px" }}
           type="button"
           onClick={() => onCreate(subgroup)}
         >
-          <Link2 size={18} aria-hidden="true" />
+          <Link2 size={16} aria-hidden="true" />
           Создать ссылку для подгруппы {subgroup}
         </button>
       )}
@@ -133,52 +128,45 @@ function StudentsList({
 }): React.JSX.Element {
   return (
     <section aria-labelledby="students-title">
-      <div className="mb-4 flex items-end justify-between gap-4">
+      <div className="section-heading">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-950" id="students-title">
-            Участники группы
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">Роли и распределение по подгруппам</p>
+          <h2 id="students-title">Участники группы</h2>
+          <p>Роли и распределение по подгруппам</p>
         </div>
-        <span className="shrink-0 text-sm font-medium text-zinc-600">{students.length} участников</span>
+        <span className="count-badge">{students.length} участников</span>
       </div>
 
-      <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+      <ul className="students-card">
         {students.map((student) => {
           const role = studentRoles.get(student.id) ?? student.role;
           return (
             <li
-              className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"
+              className="student-row"
               key={student.id}
               aria-label={student.name}
             >
-              <div className="flex min-w-0 items-center gap-3">
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                 <span
-                  className={`avatar avatar-${student.color} flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-700`}
+                  className={`avatar avatar-${student.color}`}
                   aria-hidden="true"
                 >
                   {student.initials}
                 </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-zinc-950">{student.name}</p>
-                  <p className="mt-0.5 text-xs text-zinc-500">Подгруппа {student.subgroup}</p>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: "var(--foreground)" }}>{student.name}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--muted)" }}>Подгруппа {student.subgroup}</p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-3 sm:justify-end">
-                <span
-                  className={`inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold ${
-                    role === "Староста"
-                      ? "bg-blue-50 text-blue-800"
-                      : "bg-zinc-100 text-zinc-600"
-                  }`}
-                >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                <span className={`role-badge ${role === "Староста" ? "head" : "student"}`}>
                   {role === "Староста" ? <ShieldCheck size={14} aria-hidden="true" /> : null}
                   {role}
                 </span>
                 {role === "Студент" ? (
                   <button
-                    className="min-h-10 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-blue-300 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="button button-secondary"
+                    style={{ minHeight: "34px", fontSize: "12px", padding: "0 12px" }}
                     type="button"
                     aria-label={`Назначить старостой: ${student.name}`}
                     onClick={() => onMakeHead(student)}
@@ -241,46 +229,36 @@ export function AdminPanel(): React.JSX.Element {
 
   return (
     <div>
-      <div className="mb-6 border-b border-zinc-200" role="tablist" aria-label="Управление группой">
-        <div className="flex gap-6">
-          <button
-            className={`relative min-h-11 px-1 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              activeTab === "invites" ? "text-blue-700" : "text-zinc-500 hover:text-zinc-900"
-            }`}
-            id="invites-tab"
-            type="button"
-            role="tab"
-            aria-controls="invites-panel"
-            aria-selected={activeTab === "invites"}
-            onClick={() => setActiveTab("invites")}
-          >
-            Приглашения
-            {activeTab === "invites" ? (
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-700" aria-hidden="true" />
-            ) : null}
-          </button>
-          <button
-            className={`relative min-h-11 px-1 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              activeTab === "students" ? "text-blue-700" : "text-zinc-500 hover:text-zinc-900"
-            }`}
-            id="students-tab"
-            type="button"
-            role="tab"
-            aria-controls="students-panel"
-            aria-selected={activeTab === "students"}
-            onClick={() => setActiveTab("students")}
-          >
-            Студенты
-            {activeTab === "students" ? (
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-700" aria-hidden="true" />
-            ) : null}
-          </button>
-        </div>
+      <div className="admin-tabs" role="tablist" aria-label="Управление группой">
+        <button
+          className={`admin-tab-btn${activeTab === "invites" ? " is-active" : ""}`}
+          id="invites-tab"
+          type="button"
+          role="tab"
+          aria-controls="invites-panel"
+          aria-selected={activeTab === "invites"}
+          onClick={() => setActiveTab("invites")}
+        >
+          Приглашения
+          {activeTab === "invites" ? <span className="admin-tab-indicator" aria-hidden="true" /> : null}
+        </button>
+        <button
+          className={`admin-tab-btn${activeTab === "students" ? " is-active" : ""}`}
+          id="students-tab"
+          type="button"
+          role="tab"
+          aria-controls="students-panel"
+          aria-selected={activeTab === "students"}
+          onClick={() => setActiveTab("students")}
+        >
+          Студенты
+          {activeTab === "students" ? <span className="admin-tab-indicator" aria-hidden="true" /> : null}
+        </button>
       </div>
 
       {activeTab === "invites" ? (
         <section
-          className="grid gap-4 md:grid-cols-2"
+          className="invite-grid"
           id="invites-panel"
           role="tabpanel"
           aria-labelledby="invites-tab"
