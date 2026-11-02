@@ -3,6 +3,8 @@ export type Subgroup = 1 | 2;
 export type Homework = {
   id: string;
   description: string;
+  dueDate?: string;
+  subgroup?: Subgroup | "all";
 };
 
 export type Lesson = {
@@ -21,8 +23,12 @@ export type Lesson = {
 };
 
 export type HomeworkDraft = {
+  id?: string;
   lessonId: string;
+  subject?: string;
+  subgroup?: Subgroup | "all";
   description: string;
+  dueDate: string;
 };
 
 export type Student = {

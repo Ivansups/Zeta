@@ -1235,6 +1235,7 @@ a {
 }
 
 .editor-form textarea,
+.editor-form input,
 .picker-frame select {
   width: 100%;
   border: 1px solid var(--border);
@@ -1245,10 +1246,19 @@ a {
 }
 
 .editor-form textarea:focus,
+.editor-form input:focus,
 .picker-frame select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
   outline: none;
+}
+
+.editor-form input {
+  height: 48px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0 16px;
+  margin-bottom: 16px;
 }
 
 .editor-form textarea {
