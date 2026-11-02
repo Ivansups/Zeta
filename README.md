@@ -172,7 +172,6 @@ cd telegram-bot && uv sync
 graph LR
     PR[Pull request / push в main] --> CI
     PR --> SEC
-    PR --> CQ[codeql.yml]
 
     subgraph CI[ci.yml]
         CH[Определение изменённых пакетов] --> BE[backend]
@@ -190,28 +189,25 @@ graph LR
         S2[Semgrep: SAST]
         S3[Trivy: уязвимости, секреты, конфиги]
         S4[OSV-Scanner: зависимости]
-        S5[Dependency review: новые зависимости в PR]
         S6[zizmor: безопасность workflow]
         S7[SBOM CycloneDX: только main]
         S1 --> SOK[Security OK]
-        S2 --> SOK
-        S3 --> SOK
-        S4 --> SOK
-        S5 --> SOK
-        S6 --> SOK
+        S2 -.-> SOK
+        S3 -.-> SOK
+        S4 -.-> SOK
+        S6 -.-> SOK
     end
 ```
 
 | Workflow | Что делает | Когда |
 |---|---|---|
 | `ci.yml` | Для изменённых пакетов: линт, форматирование, типы, тесты (backend — с PostgreSQL, проверка единственной «головы» миграций и `alembic check`), сборка frontend, аудит зависимостей (`pip-audit`, `pnpm audit`) | PR и push в `main` |
-| `security.yml` | gitleaks, Semgrep, Trivy, OSV-Scanner, dependency review, zizmor, SBOM | PR, push в `main`, раз в неделю |
-| `codeql.yml` | CodeQL (Python, JS/TS, набор `security-extended`) | PR, push в `main`, раз в неделю |
+| `security.yml` | gitleaks (строгий блокер), Semgrep, Trivy, OSV-Scanner, zizmor (non-blocking), SBOM | PR, push в `main`, раз в неделю |
 | `scorecard.yml` | OpenSSF Scorecard — оценка практик безопасности репозитория | push в `main`, раз в неделю |
 | `telegram-notify.yml` | Уведомления в Telegram о push/PR/merge | как раньше |
 
 **Required checks для `main`** (Settings → Branches → Branch protection): `CI OK` и `Security OK`. Отдельные джобы обязательными не делаем: при PR, который не трогает пакет, они пропускаются, а пропущенная обязательная проверка блокирует мерж. Заодно стоит включить «Require review from Code Owners» и запрет force push.
 
-Что нужно включить в настройках репозитория: Code scanning (для CodeQL и Scorecard), Dependabot alerts и Dependabot security updates, Secret scanning с push protection.
+Что нужно включить в настройках репозитория: Dependabot alerts и Dependabot security updates, Secret scanning с push protection.
 
 Локально те же проверки пакета описаны в разделе «Проверки». Известное ограничение: для `braces` и `node-forge` в npm пока нет исправленных версий, поэтому два advisory явно игнорируются в `auditConfig` (`frontend/pnpm-workspace.yaml`, `mobile/pnpm-workspace.yaml`) — это транзитивные dev-зависимости, при выходе фикса записи нужно удалить.
