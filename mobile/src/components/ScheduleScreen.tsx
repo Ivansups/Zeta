@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
 import { DayOfWeek, SchedulePair, Subgroup, User } from "../types";
 import { api } from "../services/api";
+import { theme } from "../theme/colors";
 
 interface ScheduleScreenProps {
   user: User;
@@ -9,12 +10,12 @@ interface ScheduleScreenProps {
   onSubgroupChange: (subgroup: Subgroup) => void;
 }
 
-const DAYS: { key: DayOfWeek; label: string }[] = [
-  { key: "monday", label: "Пн" },
-  { key: "tuesday", label: "Вт" },
-  { key: "wednesday", label: "Ср" },
-  { key: "thursday", label: "Чт" },
-  { key: "friday", label: "Пт" },
+const DAYS: { key: DayOfWeek; label: string; date: string }[] = [
+  { key: "monday", label: "Пн", date: "12" },
+  { key: "tuesday", label: "Вт", date: "13" },
+  { key: "wednesday", label: "Ср", date: "14" },
+  { key: "thursday", label: "Чт", date: "15" },
+  { key: "friday", label: "Пт", date: "16" },
 ];
 
 export function ScheduleScreen({
@@ -27,7 +28,7 @@ export function ScheduleScreen({
 
   useEffect(() => {
     let isMounted = true;
-    void api.getSchedule(selectedDay, subgroup).then((data) => {
+    void api.getSchedule(selectedDay, subgroup).then((data: SchedulePair[]) => {
       if (isMounted) {
         setPairs(data);
       }
@@ -39,61 +40,65 @@ export function ScheduleScreen({
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Шапка расписания */}
+      {/* Шапка страницы */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.groupTitle}>Группа {user.groupName}</Text>
-          <Text style={styles.subgroupSubtitle}>
-            {user.role === "elder" ? "Староста" : "Студент"}: {user.firstName} {user.lastName ?? ""}
-          </Text>
-        </View>
-
-        {/* Переключатель подгруппы */}
-        <View style={styles.subgroupSwitch}>
-          <TouchableOpacity
-            style={[styles.subgroupBtn, subgroup === 1 && styles.subgroupBtnActive]}
-            onPress={() => onSubgroupChange(1)}
-            testID="subgroup-btn-1"
-          >
-            <Text style={[styles.subgroupBtnText, subgroup === 1 && styles.subgroupBtnTextActive]}>
-              Подгр. 1
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.subgroupBtn, subgroup === 2 && styles.subgroupBtnActive]}
-            onPress={() => onSubgroupChange(2)}
-            testID="subgroup-btn-2"
-          >
-            <Text style={[styles.subgroupBtnText, subgroup === 2 && styles.subgroupBtnTextActive]}>
-              Подгр. 2
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.eyebrow}>
+          {user.role === "elder" ? "Староста" : "Студент"} · Числитель
+        </Text>
+        <Text style={styles.title}>Расписание</Text>
+        <Text style={styles.subtitle}>
+          Группа {user.groupName} · {user.firstName} {user.lastName ?? ""}
+        </Text>
       </View>
 
-      {/* Дни недели */}
-      <View style={styles.daysRow}>
+      {/* Переключатель подгруппы (Segmented Control) */}
+      <View style={styles.segmentedControl}>
+        <TouchableOpacity
+          style={[styles.segmentBtn, subgroup === 1 && styles.segmentBtnActive]}
+          onPress={() => onSubgroupChange(1)}
+          testID="subgroup-btn-1"
+        >
+          <Text style={[styles.segmentText, subgroup === 1 && styles.segmentTextActive]}>
+            Подгруппа 1
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.segmentBtn, subgroup === 2 && styles.segmentBtnActive]}
+          onPress={() => onSubgroupChange(2)}
+          testID="subgroup-btn-2"
+        >
+          <Text style={[styles.segmentText, subgroup === 2 && styles.segmentTextActive]}>
+            Подгруппа 2
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Полоса дней недели (Week Strip) */}
+      <View style={styles.weekStrip}>
         {DAYS.map((day) => {
           const isActive = selectedDay === day.key;
           return (
             <TouchableOpacity
               key={day.key}
-              style={[styles.dayButton, isActive && styles.dayButtonActive]}
+              style={[styles.weekDayBtn, isActive && styles.weekDayBtnActive]}
               onPress={() => setSelectedDay(day.key)}
               testID={`day-btn-${day.key}`}
             >
-              <Text style={[styles.dayButtonText, isActive && styles.dayButtonTextActive]}>
+              <Text style={[styles.weekDayLabel, isActive && styles.weekDayLabelActive]}>
                 {day.label}
+              </Text>
+              <Text style={[styles.weekDayDate, isActive && styles.weekDayDateActive]}>
+                {day.date}
               </Text>
             </TouchableOpacity>
           );
         })}
       </View>
 
-      {/* Список пар */}
-      <View style={styles.pairsContainer}>
-        <Text style={styles.sectionTitle}>
-          Расписание на {DAYS.find((d) => d.key === selectedDay)?.label} (Подгруппа {subgroup})
+      {/* Список занятий */}
+      <View style={styles.pairsSection}>
+        <Text style={styles.sectionHeading}>
+          {DAYS.find((d) => d.key === selectedDay)?.label}, {DAYS.find((d) => d.key === selectedDay)?.date} октября · {pairs.length} пары
         </Text>
 
         {pairs.length === 0 ? (
@@ -102,28 +107,39 @@ export function ScheduleScreen({
           </View>
         ) : (
           pairs.map((pair) => (
-            <View key={pair.id} style={styles.pairCard} testID="pair-card">
-              <View style={styles.pairHeader}>
-                <View style={styles.timeBadge}>
-                  <Text style={styles.timeText}>
-                    {pair.timeStart} – {pair.timeEnd}
+            <View key={pair.id} style={styles.lessonCard} testID="pair-card">
+              {/* Колонка времени */}
+              <View style={styles.timeColumn}>
+                <Text style={styles.timeStart}>{pair.timeStart}</Text>
+                <Text style={styles.timeEnd}>{pair.timeEnd}</Text>
+              </View>
+
+              {/* Основная часть карточки */}
+              <View style={styles.lessonMain}>
+                <View style={styles.lessonHeader}>
+                  <Text style={styles.subjectText}>{pair.subject}</Text>
+                  {pair.subgroup ? (
+                    <View style={styles.subgroupPill}>
+                      <Text style={styles.subgroupPillText}>Подгр. {pair.subgroup}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.allGroupPill}>
+                      <Text style={styles.allGroupPillText}>Вся группа</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.metaRow}>
+                  <Text style={styles.metaText}>📍 {pair.classroom}</Text>
+                  <Text style={styles.metaText}>👤 {pair.teacher}</Text>
+                </View>
+
+                <View style={styles.homeworkInline}>
+                  <Text style={styles.homeworkInlineText}>
+                    📝 Домашнее задание пока не добавлено
                   </Text>
                 </View>
-                <Text style={styles.pairNumber}>{pair.pairNumber} пара</Text>
               </View>
-
-              <Text style={styles.subjectText}>{pair.subject}</Text>
-
-              <View style={styles.pairFooter}>
-                <Text style={styles.teacherText}>{pair.teacher}</Text>
-                <Text style={styles.classroomText}>{pair.classroom}</Text>
-              </View>
-
-              {pair.subgroup ? (
-                <View style={styles.subgroupBadge}>
-                  <Text style={styles.subgroupBadgeText}>Подгруппа {pair.subgroup}</Text>
-                </View>
-              ) : null}
             </View>
           ))
         )}
@@ -136,167 +152,207 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     paddingTop: 54,
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.background,
     flexGrow: 1,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: 16,
   },
-  groupTitle: {
-    fontSize: 22,
+  eyebrow: {
+    fontSize: 12,
     fontWeight: "700",
-    color: "#0f172a",
+    color: theme.colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  subgroupSubtitle: {
-    fontSize: 13,
-    color: "#64748b",
+  title: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: theme.colors.foreground,
     marginTop: 2,
   },
-  subgroupSwitch: {
+  subtitle: {
+    fontSize: 14,
+    color: theme.colors.muted,
+    marginTop: 2,
+  },
+  segmentedControl: {
     flexDirection: "row",
-    backgroundColor: "#e2e8f0",
-    borderRadius: 8,
-    padding: 2,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radii.md,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSoft,
+    marginBottom: 14,
   },
-  subgroupBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: theme.radii.sm,
+    alignItems: "center",
   },
-  subgroupBtnActive: {
-    backgroundColor: "#ffffff",
+  segmentBtnActive: {
+    backgroundColor: theme.colors.surface,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
   },
-  subgroupBtnText: {
-    fontSize: 12,
-    color: "#64748b",
+  segmentText: {
+    fontSize: 13,
     fontWeight: "500",
+    color: theme.colors.muted,
   },
-  subgroupBtnTextActive: {
-    color: "#0f172a",
+  segmentTextActive: {
+    color: theme.colors.foreground,
     fontWeight: "600",
   },
-  daysRow: {
+  weekStrip: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 18,
   },
-  dayButton: {
+  weekDayBtn: {
     flex: 1,
-    marginHorizontal: 3,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "#ffffff",
+    marginHorizontal: 2,
+    paddingVertical: 8,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.surface,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.borderSoft,
   },
-  dayButtonActive: {
-    backgroundColor: "#2563eb",
-    borderColor: "#2563eb",
+  weekDayBtnActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
-  dayButtonText: {
-    fontSize: 14,
+  weekDayLabel: {
+    fontSize: 11,
     fontWeight: "600",
-    color: "#475569",
+    color: theme.colors.muted,
   },
-  dayButtonTextActive: {
+  weekDayLabelActive: {
     color: "#ffffff",
   },
-  pairsContainer: {
-    marginTop: 4,
-  },
-  sectionTitle: {
+  weekDayDate: {
     fontSize: 15,
+    fontWeight: "700",
+    color: theme.colors.foreground,
+    marginTop: 2,
+  },
+  weekDayDateActive: {
+    color: "#ffffff",
+  },
+  pairsSection: {
+    marginTop: 2,
+  },
+  sectionHeading: {
+    fontSize: 14,
     fontWeight: "600",
-    color: "#334155",
+    color: theme.colors.mutedStrong,
     marginBottom: 12,
   },
-  pairCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 16,
+  lessonCard: {
+    flexDirection: "row",
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.md,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: theme.colors.border,
+    overflow: "hidden",
   },
-  pairHeader: {
+  timeColumn: {
+    width: 70,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRightWidth: 1,
+    borderRightColor: theme.colors.borderSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+  },
+  timeStart: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: theme.colors.foreground,
+  },
+  timeEnd: {
+    fontSize: 11,
+    color: theme.colors.muted,
+    marginTop: 2,
+  },
+  lessonMain: {
+    flex: 1,
+    padding: 12,
+  },
+  lessonHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  timeBadge: {
-    backgroundColor: "#eff6ff",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-  timeText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#2563eb",
-  },
-  pairNumber: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "500",
+    alignItems: "flex-start",
+    marginBottom: 6,
   },
   subjectText: {
-    fontSize: 16,
+    flex: 1,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#1e293b",
+    color: theme.colors.foreground,
+    marginRight: 6,
+  },
+  subgroupPill: {
+    backgroundColor: theme.colors.primarySoft,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: theme.radii.full,
+  },
+  subgroupPillText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: theme.colors.primary,
+  },
+  allGroupPill: {
+    backgroundColor: theme.colors.surfaceMuted,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: theme.radii.full,
+  },
+  allGroupPillText: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: theme.colors.muted,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 4,
     marginBottom: 8,
   },
-  pairFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  metaText: {
+    fontSize: 12,
+    color: theme.colors.muted,
   },
-  teacherText: {
-    fontSize: 13,
-    color: "#64748b",
-  },
-  classroomText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#0f172a",
-  },
-  subgroupBadge: {
-    alignSelf: "flex-start",
-    marginTop: 10,
-    backgroundColor: "#fef3c7",
-    paddingVertical: 3,
+  homeworkInline: {
+    backgroundColor: theme.colors.surfaceMuted,
+    paddingVertical: 6,
     paddingHorizontal: 8,
-    borderRadius: 4,
+    borderRadius: theme.radii.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSoft,
   },
-  subgroupBadgeText: {
+  homeworkInlineText: {
     fontSize: 11,
-    color: "#92400e",
-    fontWeight: "500",
+    color: theme.colors.mutedStrong,
   },
   emptyCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.md,
     padding: 24,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.border,
   },
   emptyText: {
-    fontSize: 14,
-    color: "#94a3b8",
+    fontSize: 13,
+    color: theme.colors.muted,
   },
 });

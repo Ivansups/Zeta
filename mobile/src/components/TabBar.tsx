@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { TabName } from "../types";
+import { theme } from "../theme/colors";
 
 interface TabBarProps {
   activeTab: TabName;
@@ -46,28 +47,28 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps): React.JSX.Eleme
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
+    borderTopColor: theme.colors.borderSoft,
     paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     justifyContent: "space-around",
   },
   tabButton: {
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    borderRadius: theme.radii.sm,
   },
   tabButtonActive: {
-    backgroundColor: "#eff6ff",
+    backgroundColor: theme.colors.primarySoft,
   },
   tabText: {
-    fontSize: 13,
-    color: "#64748b",
+    fontSize: 12,
+    color: theme.colors.muted,
     fontWeight: "500",
   },
   tabTextActive: {
-    color: "#2563eb",
+    color: theme.colors.primary,
     fontWeight: "700",
   },
 });

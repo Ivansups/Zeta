@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { User } from "../types";
 import { api } from "../services/api";
+import { theme } from "../theme/colors";
 
 interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
@@ -24,6 +25,9 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Ele
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <View style={styles.brandMark}>
+          <Text style={styles.brandLetter}>Z</Text>
+        </View>
         <Text style={styles.logo}>Zeta</Text>
         <Text style={styles.subtitle}>Система учёта домашних заданий ФКН</Text>
         <Text style={styles.caption}>Вход осуществляется через Telegram аккаунт</Text>
@@ -77,7 +81,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Ele
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>Мобильное приложение Zeta · Итерация 1</Text>
+        <Text style={styles.footerText}>Мобильное приложение Zeta · Единая дизайн-система</Text>
       </View>
     </View>
   );
@@ -89,76 +93,90 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 80,
     justifyContent: "space-between",
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.colors.background,
   },
   header: {
     alignItems: "center",
     marginBottom: 32,
   },
-  logo: {
-    fontSize: 40,
+  brandMark: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.foreground,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  brandLetter: {
+    color: theme.colors.surface,
+    fontSize: 26,
     fontWeight: "800",
-    color: "#2563eb",
+  },
+  logo: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: theme.colors.foreground,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#1e293b",
-    marginTop: 8,
+    color: theme.colors.foreground,
+    marginTop: 6,
     textAlign: "center",
   },
   caption: {
-    fontSize: 14,
-    color: "#64748b",
+    fontSize: 13,
+    color: theme.colors.muted,
     marginTop: 4,
     textAlign: "center",
   },
   card: {
     padding: 20,
-    borderRadius: 16,
-    backgroundColor: "#f8fafc",
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.border,
   },
   cardTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    color: "#475569",
+    color: theme.colors.mutedStrong,
     marginBottom: 12,
   },
   profileButton: {
     padding: 12,
-    borderRadius: 10,
+    borderRadius: theme.radii.md,
     borderWidth: 1,
-    borderColor: "#cbd5e1",
-    backgroundColor: "#ffffff",
+    borderColor: theme.colors.borderSoft,
+    backgroundColor: theme.colors.surfaceMuted,
     marginBottom: 10,
   },
   profileButtonActive: {
-    borderColor: "#2563eb",
-    backgroundColor: "#eff6ff",
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySoft,
   },
   profileText: {
     fontSize: 14,
-    color: "#334155",
+    color: theme.colors.foreground,
     fontWeight: "500",
   },
   profileTextActive: {
-    color: "#2563eb",
+    color: theme.colors.primary,
     fontWeight: "600",
   },
   telegramButton: {
     marginTop: 14,
-    backgroundColor: "#2563eb",
+    backgroundColor: theme.colors.primary,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: theme.radii.md,
     alignItems: "center",
     justifyContent: "center",
   },
   telegramButtonText: {
     color: "#ffffff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
   },
   footer: {
@@ -167,6 +185,6 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: "#94a3b8",
+    color: theme.colors.muted,
   },
 });

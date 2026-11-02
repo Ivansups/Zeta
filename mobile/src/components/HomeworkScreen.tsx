@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
 import { User } from "../types";
+import { theme } from "../theme/colors";
 
 interface HomeworkScreenProps {
   user: User;
@@ -9,6 +10,7 @@ interface HomeworkScreenProps {
 export function HomeworkScreen({ user }: HomeworkScreenProps): React.JSX.Element {
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.eyebrow}>Итерация 2 · В разработке</Text>
       <Text style={styles.title}>Домашние задания</Text>
       <Text style={styles.subtitle}>Группа: {user.groupName}</Text>
 
@@ -41,56 +43,63 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     paddingTop: 54,
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.background,
     flexGrow: 1,
   },
-  title: {
-    fontSize: 24,
+  eyebrow: {
+    fontSize: 12,
     fontWeight: "700",
-    color: "#0f172a",
-    marginBottom: 4,
+    color: theme.colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: theme.colors.foreground,
+    marginTop: 2,
   },
   subtitle: {
     fontSize: 14,
-    color: "#64748b",
+    color: theme.colors.muted,
     marginBottom: 20,
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.md,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.border,
     marginBottom: 16,
   },
   cardHeader: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#1e293b",
+    color: theme.colors.foreground,
     marginBottom: 8,
   },
   cardText: {
-    fontSize: 14,
-    color: "#475569",
-    lineHeight: 20,
+    fontSize: 13,
+    color: theme.colors.mutedStrong,
+    lineHeight: 19,
     marginBottom: 6,
   },
   previewCard: {
-    backgroundColor: "#eff6ff",
-    borderRadius: 12,
+    backgroundColor: theme.colors.primarySoft,
+    borderRadius: theme.radii.md,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#bfdbfe",
+    borderColor: theme.colors.primary,
   },
   previewTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#1e40af",
+    fontSize: 14,
+    fontWeight: "700",
+    color: theme.colors.primaryStrong,
     marginBottom: 8,
   },
   bulletItem: {
     fontSize: 13,
-    color: "#1e3a8a",
+    color: theme.colors.foreground,
     lineHeight: 22,
   },
 });

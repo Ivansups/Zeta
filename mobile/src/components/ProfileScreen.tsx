@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from "react-native";
 import { User } from "../types";
+import { theme } from "../theme/colors";
 
 interface ProfileScreenProps {
   user: User;
@@ -10,6 +11,7 @@ interface ProfileScreenProps {
 export function ProfileScreen({ user, onLogout }: ProfileScreenProps): React.JSX.Element {
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.eyebrow}>Учётная запись</Text>
       <Text style={styles.title}>Профиль</Text>
 
       <View style={styles.avatarCard}>
@@ -69,56 +71,64 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     paddingTop: 54,
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.background,
     flexGrow: 1,
   },
-  title: {
-    fontSize: 24,
+  eyebrow: {
+    fontSize: 12,
     fontWeight: "700",
-    color: "#0f172a",
-    marginBottom: 20,
+    color: theme.colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: theme.colors.foreground,
+    marginTop: 2,
+    marginBottom: 16,
   },
   avatarCard: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.md,
     padding: 24,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.border,
   },
   avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#eff6ff",
+    width: 60,
+    height: 60,
+    borderRadius: theme.radii.full,
+    backgroundColor: theme.colors.primarySoft,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: "#bfdbfe",
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
   },
   avatarInitials: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
-    color: "#2563eb",
+    color: theme.colors.primary,
   },
   userName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
-    color: "#0f172a",
+    color: theme.colors.foreground,
   },
   userHandle: {
-    fontSize: 14,
-    color: "#64748b",
+    fontSize: 13,
+    color: theme.colors.muted,
     marginTop: 2,
   },
   infoCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.md,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.border,
     marginBottom: 24,
   },
   infoRow: {
@@ -128,26 +138,28 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 14,
-    color: "#64748b",
+    color: theme.colors.muted,
   },
   infoValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#0f172a",
+    color: theme.colors.foreground,
   },
   divider: {
     height: 1,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: theme.colors.borderSoft,
   },
   logoutButton: {
-    backgroundColor: "#fee2e2",
-    borderRadius: 12,
+    backgroundColor: theme.colors.dangerSoft,
+    borderRadius: theme.radii.md,
     paddingVertical: 14,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: theme.colors.danger,
   },
   logoutText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
-    color: "#dc2626",
+    color: theme.colors.danger,
   },
 });

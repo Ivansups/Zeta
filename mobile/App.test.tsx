@@ -21,8 +21,8 @@ describe("Mobile App (Zeta) - Iteration 1", () => {
     fireEvent.press(loginButton);
 
     await waitFor(() => {
-      expect(screen.getByText("Группа ИУ5-11Б")).toBeTruthy();
-      expect(screen.getByText("Студент: Иван Иванов")).toBeTruthy();
+      expect(screen.getByText(/Группа ИУ5-11Б/)).toBeTruthy();
+      expect(screen.getByText(/Иван Иванов/)).toBeTruthy();
     });
 
     // Расписание по умолчанию на понедельник
@@ -38,7 +38,7 @@ describe("Mobile App (Zeta) - Iteration 1", () => {
     fireEvent.press(screen.getByTestId("login-button"));
 
     await waitFor(() => {
-      expect(screen.getByText("Группа ИУ5-11Б")).toBeTruthy();
+      expect(screen.getByText(/Группа ИУ5-11Б/)).toBeTruthy();
     });
 
     // Переключаем на подгруппу 2
@@ -58,7 +58,7 @@ describe("Mobile App (Zeta) - Iteration 1", () => {
     fireEvent.press(screen.getByTestId("login-button"));
 
     await waitFor(() => {
-      expect(screen.getByText("Группа ИУ5-11Б")).toBeTruthy();
+      expect(screen.getByText(/Группа ИУ5-11Б/)).toBeTruthy();
     });
 
     // Переключаемся на вкладку ДЗ
@@ -83,7 +83,7 @@ describe("Mobile App (Zeta) - Iteration 1", () => {
     fireEvent.press(screen.getByTestId("login-button"));
 
     await waitFor(() => {
-      expect(screen.getByText("Группа ИУ5-11Б")).toBeTruthy();
+      expect(screen.getByText(/Группа ИУ5-11Б/)).toBeTruthy();
     });
 
     // Идём в профиль и жмём выход
@@ -97,7 +97,7 @@ describe("Mobile App (Zeta) - Iteration 1", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Войти через Telegram")).toBeTruthy();
-      expect(screen.queryByText("Группа ИУ5-11Б")).toBeNull();
+      expect(screen.queryByText(/Группа ИУ5-11Б/)).toBeNull();
     });
   });
 });
