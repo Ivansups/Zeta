@@ -19,6 +19,10 @@ TIME_REGEX = re.compile(r"(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})")
 COURSE_REGEX = re.compile(r"(\d+)\s*курс", re.IGNORECASE)
 
 
+class ScheduleStructureError(ValueError):
+    """Raised when the workbook does not match the expected timetable layout."""
+
+
 def normalize_time(t_str: str) -> str:
     """Normalize H:MM into 0H:MM format."""
     parts = t_str.strip().split(":")
@@ -52,16 +56,22 @@ class ScheduleExcelParser:
 
     async def parse_workbook(self, wb: Workbook) -> ScheduleParseResult:
         """Parse all schedule sheets in workbook."""
+        schedule_sheets = [
+            name for name in wb.sheetnames if "расписание" in name.lower()
+        ]
+        if not schedule_sheets:
+            raise ScheduleStructureError(
+                "No schedule sheets found: expected a sheet named 'Расписание …'"
+            )
+
         result = ScheduleParseResult()
-        for sheet_name in wb.sheetnames:
-            if "расписание" in sheet_name.lower():
-                ws = wb[sheet_name]
-                sheet_result = await self.parse_worksheet(ws)
-                result.lessons.extend(sheet_result.lessons)
-                result.total_cells_processed += sheet_result.total_cells_processed
-                result.regex_parsed_count += sheet_result.regex_parsed_count
-                result.llm_parsed_count += sheet_result.llm_parsed_count
-                result.unresolved_count += sheet_result.unresolved_count
+        for sheet_name in schedule_sheets:
+            sheet_result = await self.parse_worksheet(wb[sheet_name])
+            result.lessons.extend(sheet_result.lessons)
+            result.total_cells_processed += sheet_result.total_cells_processed
+            result.regex_parsed_count += sheet_result.regex_parsed_count
+            result.llm_parsed_count += sheet_result.llm_parsed_count
+            result.unresolved_count += sheet_result.unresolved_count
         return result
 
     async def parse_worksheet(self, ws: Worksheet) -> ScheduleParseResult:
@@ -148,13 +158,7 @@ class ScheduleExcelParser:
                 if cell_data:
                     result.regex_parsed_count += 1
                 elif self.llm_service:
-                    ctx = {
-                        "day": current_day,
-                        "time": f"{current_time_start}-{current_time_end}",
-                        "group": column_meta[c]["group"],
-                        "parity": parity.value,
-                    }
-                    cell_data = await self.llm_service.resolve(cell_text, ctx)
+                    cell_data = await self.llm_service.resolve(cell_text)
                     if cell_data:
                         result.llm_parsed_count += 1
                     else:

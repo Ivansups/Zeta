@@ -24,6 +24,35 @@ class LessonType(StrEnum):
     OTHER = "other"
 
 
+class LessonCellExtraction(BaseModel):
+    """Fields the LLM must extract from a single schedule cell.
+
+    Also serves as the JSON schema sent to the model, so descriptions are
+    instructions for the model rather than prompt text.
+    """
+
+    subject: str = Field(description="Название предмета", max_length=512)
+    subject_id: str | None = Field(
+        default=None, description="Числовой идентификатор предмета или null"
+    )
+    teacher: str | None = Field(default=None, description="ФИО преподавателя или null")
+    teacher_title: str | None = Field(
+        default=None,
+        description="Должность: ст.преп./доц./проф./асс. или null",
+    )
+    room: str | None = Field(
+        default=None, description="Номер аудитории, 'ДО' или 'ВУЦ'"
+    )
+    is_online: bool = Field(default=False, description="Признак дистанционного формата")
+    lesson_type: LessonType = Field(
+        default=LessonType.OTHER,
+        description="Тип занятия: lecture, practice, lab, seminar или other",
+    )
+    notes: list[str] = Field(
+        default_factory=list, description="Служебные пометки, например ['ДО', 'ВУЦ']"
+    )
+
+
 class LessonCellData(BaseModel):
     """Extracted data from a single schedule cell."""
 

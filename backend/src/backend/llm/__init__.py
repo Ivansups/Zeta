@@ -1,8 +1,8 @@
 """Shared LLM adapter for OpenAI-compatible APIs."""
 
-from backend.llm.client import HttpLLMClient, LLMClientProtocol
+from backend.llm.client import LangChainLLMClient, LLMClientProtocol
 
 __all__ = [
-    "HttpLLMClient",
     "LLMClientProtocol",
+    "LangChainLLMClient",
 ]

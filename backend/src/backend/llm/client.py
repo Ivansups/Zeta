@@ -1,76 +1,63 @@
-"""Generic HTTP client for OpenAI-compatible LLM endpoints."""
+"""Shared LLM adapter returning schema-validated structured output."""
 
-import json
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, TypeVar, runtime_checkable
 
-import httpx
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, SecretStr
+
+from backend.config import Settings
+
+ModelT = TypeVar("ModelT", bound=BaseModel)
+
+MAX_ATTEMPTS = 3
 
 
 @runtime_checkable
 class LLMClientProtocol(Protocol):
-    """Protocol for LLM client handling JSON completions."""
+    """Protocol for LLM clients returning schema-validated results."""
 
-    async def complete_json(self, prompt: str) -> dict[str, Any]:
-        """Send prompt and receive parsed JSON dictionary."""
+    async def complete_structured(self, prompt: str, schema: type[ModelT]) -> ModelT:
+        """Send the prompt and return the reply parsed into `schema`."""
         ...
 
 
-class HttpLLMClient:
-    """HTTP client for OpenAI-compatible LLM endpoints.
+class LangChainLLMClient:
+    """LLM client that returns Pydantic models instead of free-form text.
 
-    Reusable across the project for any feature that needs LLM integration
-    (schedule parsing, homework analysis, etc.).
+    The reply is constrained by the schema at the API level, and invalid replies
+    are retried automatically by the underlying runnable.
     """
 
-    def __init__(
-        self,
-        api_key: str,
-        base_url: str = "https://api.openai.com/v1",
-        model: str = "gpt-4o-mini",
-        timeout: float = 30.0,
-        http_client: httpx.AsyncClient | None = None,
-    ) -> None:
-        self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        self.timeout = timeout
-        self._http_client = http_client
+    def __init__(self, chat_model: BaseChatModel) -> None:
+        self._chat_model = chat_model
 
-    async def complete_json(self, prompt: str) -> dict[str, Any]:
-        """Send chat completion request expecting JSON object."""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": self.model,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a timetable parser. Always respond with valid JSON."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.0,
-        }
-        if self._http_client is not None:
-            resp = await self._http_client.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
+    @classmethod
+    def from_settings(cls, settings: Settings) -> "LangChainLLMClient":
+        """Build a client for the configured OpenAI-compatible endpoint."""
+        if settings.llm_api_key is None:
+            raise ValueError("LLM_API_KEY is not configured")
+        return cls(
+            ChatOpenAI(
+                api_key=SecretStr(settings.llm_api_key.get_secret_value()),
+                base_url=settings.llm_base_url,
+                model=settings.llm_model,
+                timeout=settings.llm_timeout,
+                temperature=0.0,
             )
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-        resp.raise_for_status()
-        data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-        result: dict[str, Any] = json.loads(content)
+        )
+
+    async def complete_structured(self, prompt: str, schema: type[ModelT]) -> ModelT:
+        """Ask the model for `schema`, retrying when validation fails."""
+        chain = self._chat_model.with_structured_output(
+            schema, method="json_schema", strict=True
+        ).with_retry(
+            stop_after_attempt=MAX_ATTEMPTS,
+            wait_exponential_jitter=False,
+        )
+        result = await chain.ainvoke(prompt)
+        if not isinstance(result, schema):
+            raise TypeError(
+                f"LLM returned {type(result).__name__}, expected {schema.__name__}"
+            )
         return result
