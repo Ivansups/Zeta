@@ -6,9 +6,10 @@ import httpx
 import pytest
 from openpyxl import Workbook
 
+from backend.llm.client import HttpLLMClient
 from backend.schedule.cell_parser import parse_lesson_cell
 from backend.schedule.excel_parser import ScheduleExcelParser
-from backend.schedule.llm_fallback import HttpLLMClient, LLMFallbackService
+from backend.schedule.llm_fallback import LLMFallbackService
 from backend.schedule.models import WeekParity
 
 
