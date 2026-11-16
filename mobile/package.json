@@ -30,6 +30,9 @@
     "test": "jest"
   },
   "private": true,
+  "overrides": {
+    "node-forge": "^1.4.1"
+  },
   "packageManager": "pnpm@11.17.0",
   "jest": {
     "preset": "jest-expo"
