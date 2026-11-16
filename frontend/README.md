@@ -10,6 +10,18 @@ pnpm dev                              # http://localhost:3000
 pnpm lint && pnpm typecheck && pnpm test
 ```
 
+## Дизайн-система и токены оформления
+
+Единый источник дизайн-токенов Zeta (CR-01 / ADR-01) описан в модуле `src/theme`:
+
+- `src/theme/tokens.ts` — типизированные константы темы (цветовая палитра `lightColors` и `darkColors`, радиусы `radii`, шкала отступов `spacing`, тени `shadows` и тайминги анимаций `transitions`).
+- `src/app/globals.css` — CSS-переменные для глобальных стилей и Tailwind (`:root` и `:root[data-theme="dark"]`).
+
+Порядок изменения дизайн-системы:
+1. Новые цвета, скругления или отступы объявляются в `src/theme/tokens.ts` с добавлением типов в интерфейс `ThemeColors` / `ThemeTokens`.
+2. CSS-переменные в `src/app/globals.css` синхронизируются со значениями из `tokens.ts`.
+3. Модульные тесты `src/theme/tokens.test.ts` проверяют согласованность палитр светлой и тёмной тем.
+
 ## API-прокси
 
 Route Handler `src/app/api/[...path]/route.ts` проксирует `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` и `OPTIONS` на backend. В `.env.local` задайте `API_URL` как origin FastAPI, например `API_URL=http://localhost:8000`. Запрос клиента к `/api/health?verbose=1` уйдёт на `http://localhost:8000/health?verbose=1`; токены и остальные прикладные заголовки передаются backend без локальной авторизации или базы данных.
