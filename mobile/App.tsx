@@ -1,24 +1,20 @@
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View } from "react-native";
+
+import { samplePairs } from "./src/data/sample-schedule";
+import { ScheduleScreen } from "./src/screens/schedule-screen";
+import { getSessionFromEnv } from "./src/session";
 
 export default function App(): React.JSX.Element {
+  const session = getSessionFromEnv();
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Zeta</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <StatusBar style="dark" />
+      <ScheduleScreen
+        role={session.role}
+        token={session.token}
+        initialPairs={samplePairs}
+      />
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "600",
-  },
-});
