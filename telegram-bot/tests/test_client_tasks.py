@@ -14,7 +14,7 @@ def _json_body(request: httpx.Request) -> dict[str, object]:
 
 async def test_parse_homework_draft_sends_text_and_telegram_id() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/homework/parse-draft"
+        assert request.url.path == "/homework/parse-from-text"
         assert _json_body(request) == {
             "telegram_id": 42,
             "text": "ДЗ матан: номер 12 к среде",

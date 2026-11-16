@@ -149,9 +149,9 @@ class BackendClient:
     async def parse_homework_draft(self, telegram_id: int, text: str) -> HomeworkDraft:
         """Send free-form homework text to the backend for structuring."""
         payload = await self._post_json(
-            "/homework/parse-draft", {"telegram_id": telegram_id, "text": text}
+            "/homework/parse-from-text", {"telegram_id": telegram_id, "text": text}
         )
-        return _validate_payload(HomeworkDraft, payload, "/homework/parse-draft")
+        return _validate_payload(HomeworkDraft, payload, "/homework/parse-from-text")
 
     async def confirm_homework_draft(
         self, telegram_id: int, draft_id: str
