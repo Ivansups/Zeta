@@ -16,6 +16,18 @@ export interface User {
 
 export type DayOfWeek = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
 
+export interface HomeworkItem {
+  id: string;
+  pairId?: string;
+  subject: string;
+  title: string;
+  description: string;
+  deadline: string; // Формат: "18 ноября", "20.11" или ISO
+  day: DayOfWeek;
+  subgroup?: Subgroup; // undefined = для всей группы
+  isCompleted?: boolean;
+}
+
 export interface SchedulePair {
   id: string;
   pairNumber: number;
@@ -27,6 +39,7 @@ export interface SchedulePair {
   day: DayOfWeek;
   subgroup?: Subgroup; // undefined = для всей группы
   homework?: string;
+  homeworkItem?: HomeworkItem;
 }
 
 export type TabName = "schedule" | "homework" | "profile";

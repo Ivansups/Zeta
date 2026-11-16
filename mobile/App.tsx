@@ -45,7 +45,13 @@ export default function App(): React.JSX.Element {
             onSubgroupChange={setSubgroup}
           />
         )}
-        {activeTab === "homework" && <HomeworkScreen user={user} />}
+        {activeTab === "homework" && (
+          <HomeworkScreen
+            user={user}
+            subgroup={subgroup}
+            onSubgroupChange={setSubgroup}
+          />
+        )}
         {activeTab === "profile" && (
           <ProfileScreen user={user} onLogout={handleLogout} />
         )}
