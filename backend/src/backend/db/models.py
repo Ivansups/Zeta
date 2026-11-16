@@ -3,3 +3,5 @@
 Add `from backend.<module> import models as <module>_models  # noqa: F401`
 here when a module gets its first model.
 """
+
+from backend.auth import models as auth_models  # noqa: F401

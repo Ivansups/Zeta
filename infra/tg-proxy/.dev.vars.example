@@ -1,0 +1,6 @@
+# Локальные переменные окружения для wrangler dev (аналог .env)
+# Скопируйте в .dev.vars для локального тестирования
+
+TELEGRAM_API_BASE="https://api.telegram.org"
+ALLOWED_IP="127.0.0.1"
+PROXY_SECRET="dev-proxy-secret"

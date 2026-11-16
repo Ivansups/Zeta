@@ -11,7 +11,7 @@
 | Пакет | Что это | Стек | Владелец |
 |---|---|---|---|
 | [`backend/`](backend) | API, авторизация, данные, LLM-обвязка | FastAPI, SQLAlchemy (async), Alembic, PostgreSQL, `uv` | Климов |
-| [`telegram-bot/`](telegram-bot) | Тонкий клиент Telegram: вход, ввод ДЗ текстом | Python, long polling, `uv` | Ульянченко |
+| [`telegram-bot/`](telegram-bot) | Тонкий клиент Telegram: ввод ДЗ текстом, вопросы | Python, long polling, `uv` | Ульянченко |
 | [`frontend/`](frontend) | Веб-приложение; Telegram Mini App — отдельный роут этого же приложения | Next.js (App Router), Tailwind, `pnpm` | Шелудько (веб), Ульянченко (роут Mini App) |
 | [`mobile/`](mobile) | Мобильное приложение | React Native (Expo), `pnpm` | Берестнев, Ремезов |
 
@@ -56,7 +56,7 @@ graph LR
 
 ```mermaid
 graph TD
-    API[FastAPI routers] --> AUTH[auth<br/>login-флоу, JWT, инвайты]
+    API[FastAPI routers] --> AUTH[auth<br/>Telegram Login Widget, JWT, инвайты]
     API --> USERS[users<br/>роли, группа, подгруппа]
     API --> SCHED[schedule<br/>парсинг Excel, числитель/знаменатель]
     API --> HW[homework<br/>CRUD ДЗ, привязка к паре]
@@ -86,23 +86,25 @@ graph TD
 
 ### Вход через Telegram
 
-Telegram Login Widget не подходит (нужен публичный HTTPS-домен), поэтому используется deep-link и поллинг. Это воспроизводится локально без деплоя. Один контракт `/auth/*` и общая пара JWT (access + refresh) для веба, мобильного приложения и бота. Mini App входит по подписанному `initData` через `POST /auth/telegram/webapp` и получает те же токены.
+Вход в веб-приложение осуществляется через **Telegram Login Widget** (Web Widget): бесшовный вход в один клик без необходимости переходить в отдельный чат бота и ожидать подтверждения. Веб-клиент получает подписанный объект от Telegram и передаёт его в `POST /auth/telegram/widget`, где бэкенд валидирует HMAC-SHA256 подпись токеном бота.
+
+Telegram Mini App входит по схожей схеме через подписанный `initData` (`POST /auth/telegram/webapp`). Все клиенты получают единую пару JWT (access + refresh). Бот освобождён от логин-флоу веба и работает в режиме long polling исключительно для диалоговых сценариев.
 
 ```mermaid
 sequenceDiagram
-    participant C as Клиент (веб / мобильный)
-    participant BE as backend
+    participant C as Клиент (веб / Next.js)
+    participant TG as Telegram Login Widget
+    participant BE as backend (FastAPI)
     participant U as Пользователь
-    participant Bot as telegram-bot
 
-    C->>BE: POST /auth/telegram/start
-    BE-->>C: login_token + ссылка t.me/бот?start=login_token
-    C->>C: показывает ссылку или QR, начинает поллинг
-    U->>Bot: переходит по ссылке (/start login_token)
-    Bot->>BE: POST /auth/telegram/confirm {token, telegram_id}
-    BE->>BE: найти или создать пользователя, применить инвайт
-    C->>BE: GET /auth/telegram/status?token=…
-    BE-->>C: confirmed + access/refresh JWT
+    U->>C: открывает страницу входа (или /invite/<token>)
+    C->>TG: отображает виджет авторизации
+    U->>TG: нажимает «Войти через Telegram»
+    TG-->>C: данные профиля + auth_date + hash
+    C->>BE: POST /auth/telegram/widget {id, ..., hash, invite_token}
+    BE->>BE: валидация HMAC-SHA256(SHA256(bot_token), data)
+    BE->>BE: найти или создать пользователя (применить инвайт)
+    BE-->>C: access/refresh JWT
 ```
 
 ### Данные
@@ -115,7 +117,6 @@ erDiagram
     GROUPS ||--o{ USERS : "учатся в"
     SUBGROUPS ||--o{ USERS : "учатся в"
     USERS ||--o{ AUDIT_LOG : "действия"
-    USERS ||--o{ LOGIN_TOKENS : "подтверждает вход"
     USERS ||--o{ INVITE_TOKENS : "создаёт"
     GROUPS ||--o{ HOMEWORK : "задаётся группе"
 
@@ -132,10 +133,6 @@ erDiagram
         string role
         string group_name
         bool revoked
-    }
-    LOGIN_TOKENS {
-        string token PK
-        string status "pending, confirmed, expired"
     }
 ```
 
@@ -175,7 +172,6 @@ cd telegram-bot && uv sync
 graph LR
     PR[Pull request / push в main] --> CI
     PR --> SEC
-    PR --> CQ[codeql.yml]
 
     subgraph CI[ci.yml]
         CH[Определение изменённых пакетов] --> BE[backend]
@@ -193,28 +189,25 @@ graph LR
         S2[Semgrep: SAST]
         S3[Trivy: уязвимости, секреты, конфиги]
         S4[OSV-Scanner: зависимости]
-        S5[Dependency review: новые зависимости в PR]
         S6[zizmor: безопасность workflow]
         S7[SBOM CycloneDX: только main]
         S1 --> SOK[Security OK]
-        S2 --> SOK
-        S3 --> SOK
-        S4 --> SOK
-        S5 --> SOK
-        S6 --> SOK
+        S2 -.-> SOK
+        S3 -.-> SOK
+        S4 -.-> SOK
+        S6 -.-> SOK
     end
 ```
 
 | Workflow | Что делает | Когда |
 |---|---|---|
 | `ci.yml` | Для изменённых пакетов: линт, форматирование, типы, тесты (backend — с PostgreSQL, проверка единственной «головы» миграций и `alembic check`), сборка frontend, аудит зависимостей (`pip-audit`, `pnpm audit`) | PR и push в `main` |
-| `security.yml` | gitleaks, Semgrep, Trivy, OSV-Scanner, dependency review, zizmor, SBOM | PR, push в `main`, раз в неделю |
-| `codeql.yml` | CodeQL (Python, JS/TS, набор `security-extended`) | PR, push в `main`, раз в неделю |
+| `security.yml` | gitleaks (строгий блокер), Semgrep, Trivy, OSV-Scanner, zizmor (non-blocking), SBOM | PR, push в `main`, раз в неделю |
 | `scorecard.yml` | OpenSSF Scorecard — оценка практик безопасности репозитория | push в `main`, раз в неделю |
 | `telegram-notify.yml` | Уведомления в Telegram о push/PR/merge | как раньше |
 
 **Required checks для `main`** (Settings → Branches → Branch protection): `CI OK` и `Security OK`. Отдельные джобы обязательными не делаем: при PR, который не трогает пакет, они пропускаются, а пропущенная обязательная проверка блокирует мерж. Заодно стоит включить «Require review from Code Owners» и запрет force push.
 
-Что нужно включить в настройках репозитория: Code scanning (для CodeQL и Scorecard), Dependabot alerts и Dependabot security updates, Secret scanning с push protection.
+Что нужно включить в настройках репозитория: Dependabot alerts и Dependabot security updates, Secret scanning с push protection.
 
 Локально те же проверки пакета описаны в разделе «Проверки». Известное ограничение: для `braces` и `node-forge` в npm пока нет исправленных версий, поэтому два advisory явно игнорируются в `auditConfig` (`frontend/pnpm-workspace.yaml`, `mobile/pnpm-workspace.yaml`) — это транзитивные dev-зависимости, при выходе фикса записи нужно удалить.

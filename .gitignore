@@ -1,4 +1,5 @@
 node_modules/
+.pnpm-store/
 .next/
 .env
 .env.*
@@ -15,3 +16,6 @@ __pycache__/
 # Next.js dev server re-creates these; the shared rules live in the root AGENTS.md
 /frontend/AGENTS.md
 /frontend/CLAUDE.md
+
+# Agent harness skills
+/skills/
