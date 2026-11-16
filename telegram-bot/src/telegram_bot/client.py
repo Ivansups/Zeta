@@ -17,7 +17,7 @@ class BackendClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8000",
+        base_url: str,
         timeout: float = 10.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -54,15 +54,17 @@ class BackendClient:
         """
         try:
             response = await self._client.get("/health")
-            if response.status_code == 200 and response.json().get("status") == "ok":
-                return True
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, dict) and data.get("status") == "ok":
+                    return True
             logger.warning(
                 "Backend healthcheck returned unexpected status: %s %s",
                 response.status_code,
                 response.text,
             )
             return False
-        except httpx.HTTPError as err:
+        except (httpx.HTTPError, ValueError) as err:
             logger.warning("Backend healthcheck failed with network error: %s", err)
             return False
 
@@ -73,11 +75,3 @@ class BackendClient:
         except httpx.HTTPError as err:
             logger.error("GET request to %s failed: %s", path, err)
             raise BackendClientError(f"Backend GET {path} failed: {err}") from err
-
-    async def post(self, path: str, **kwargs: Any) -> httpx.Response:
-        """Send POST request to backend."""
-        try:
-            return await self._client.post(path, **kwargs)
-        except httpx.HTTPError as err:
-            logger.error("POST request to %s failed: %s", path, err)
-            raise BackendClientError(f"Backend POST {path} failed: {err}") from err

@@ -1,5 +1,6 @@
 """Onboarding and general handlers for Zeta Telegram Bot."""
 
+import html
 import logging
 
 from aiogram import F, Router
@@ -11,16 +12,24 @@ from telegram_bot.keyboards.onboarding import build_onboarding_keyboard
 
 logger = logging.getLogger(__name__)
 
+HELP_MESSAGE_TEXT = (
+    "📖 <b>Справка по командам Zeta:</b>\n\n"
+    "• /start — перезапустить приветствие и онбординг\n"
+    "• /help — показать эту справку\n\n"
+    "Для входа в систему используй ссылку на веб-версию в приветствии."
+)
+
 router = Router(name="onboarding")
 
 
 @router.message(CommandStart())
 async def start_handler(message: Message, settings: Settings) -> None:
     """Handle /start command with welcome greeting and onboarding info."""
-    user_name = message.from_user.full_name if message.from_user else "студент"
+    raw_name = message.from_user.full_name if message.from_user else "студент"
+    user_name = html.escape(raw_name)
     text = (
         f"Привет, {user_name}! 👋\n\n"
-        "Я бот платформы **Zeta** — твоего помощника по расписанию "
+        "Я бот платформы <b>Zeta</b> — твоего помощника по расписанию "
         "и учебным заданиям.\n\n"
         "Здесь ты сможешь:\n"
         "• Узнавать актуальное расписание пар\n"
@@ -36,34 +45,12 @@ async def start_handler(message: Message, settings: Settings) -> None:
 @router.message(Command("help"))
 async def help_handler(message: Message) -> None:
     """Handle /help command with command list and usage guidance."""
-    text = (
-        "📖 **Справка по командам Zeta:**\n\n"
-        "• /start — перезапустить приветствие и онбординг\n"
-        "• /help — показать эту справку\n\n"
-        "Для входа в систему используй ссылку на веб-версию в приветствии."
-    )
-    await message.answer(text)
+    await message.answer(HELP_MESSAGE_TEXT)
 
 
 @router.callback_query(F.data == "cmd_help")
 async def help_callback_handler(callback: CallbackQuery) -> None:
     """Handle callback from the Help button in onboarding keyboard."""
-    text = (
-        "📖 **Справка по командам Zeta:**\n\n"
-        "• /start — перезапустить приветствие и онбординг\n"
-        "• /help — показать эту справку\n\n"
-        "Для входа в систему используй ссылку на веб-версию в приветствии."
-    )
     if callback.message and isinstance(callback.message, Message):
-        await callback.message.answer(text)
+        await callback.message.answer(HELP_MESSAGE_TEXT)
     await callback.answer()
-
-
-@router.message()
-async def unknown_message_handler(message: Message) -> None:
-    """Handle unrecognized messages and commands."""
-    text = (
-        "Я пока не понимаю эту команду 🤔\n\n"
-        "Воспользуйся /start для возврата к приветствию или /help для справки."
-    )
-    await message.answer(text)

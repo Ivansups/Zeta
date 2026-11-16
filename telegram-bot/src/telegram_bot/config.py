@@ -34,6 +34,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("WEB_APP_URL", "FRONTEND_URL"),
         description="Base URL of Zeta web application",
     )
+    backend_timeout: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices("BACKEND_TIMEOUT", "BACKEND_REQUEST_TIMEOUT"),
+        description="HTTP timeout for backend API requests in seconds",
+    )
     polling_timeout: int = Field(
         default=30,
         validation_alias=AliasChoices("POLLING_TIMEOUT", "BOT_POLLING_TIMEOUT"),

@@ -1,4 +1,5 @@
 from aiogram import Dispatcher
+from aiogram.enums import ParseMode
 from pydantic import SecretStr
 
 from telegram_bot.config import Settings
@@ -14,6 +15,7 @@ def test_create_dispatcher() -> None:
 
     sub_router_names = [r.name for r in dp.sub_routers]
     assert "onboarding" in sub_router_names
+    assert sub_router_names[-1] == "fallback"
 
 
 def test_create_bot_standard() -> None:
@@ -21,6 +23,7 @@ def test_create_bot_standard() -> None:
     bot = create_bot(settings)
 
     assert bot.token == "123456:TEST_BOT"
+    assert bot.default.parse_mode == ParseMode.HTML
 
 
 def test_create_bot_with_proxy() -> None:

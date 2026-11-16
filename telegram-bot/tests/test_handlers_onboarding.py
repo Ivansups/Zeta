@@ -5,11 +5,11 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, User
 from pydantic import SecretStr
 
 from telegram_bot.config import Settings
+from telegram_bot.handlers.fallback import unknown_message_handler
 from telegram_bot.handlers.onboarding import (
     help_callback_handler,
     help_handler,
     start_handler,
-    unknown_message_handler,
 )
 
 
@@ -47,6 +47,18 @@ async def test_start_handler(mock_message: MagicMock, dummy_settings: Settings) 
         for row in reply_markup.inline_keyboard
         for button in row
     )
+
+
+async def test_start_handler_escapes_user_name(
+    mock_message: MagicMock, dummy_settings: Settings
+) -> None:
+    mock_message.from_user.full_name = "<b>Иван</b> & Co"
+
+    await start_handler(mock_message, dummy_settings)
+
+    text = mock_message.answer.call_args.args[0]
+    assert "&lt;b&gt;Иван&lt;/b&gt; &amp; Co" in text
+    assert "<b>Иван</b>" not in text
 
 
 async def test_help_handler(mock_message: MagicMock) -> None:

@@ -12,6 +12,7 @@ from aiogram.enums import ParseMode
 
 from telegram_bot.client import BackendClient
 from telegram_bot.config import Settings
+from telegram_bot.handlers.fallback import router as fallback_router
 from telegram_bot.handlers.onboarding import router as onboarding_router
 
 logger = logging.getLogger("telegram_bot")
@@ -36,7 +37,7 @@ def create_bot(settings: Settings) -> Bot:
     return Bot(
         token=settings.bot_token.get_secret_value(),
         session=session,
-        default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
 
@@ -45,19 +46,23 @@ def create_dispatcher(settings: Settings) -> Dispatcher:
     dp = Dispatcher()
     dp["settings"] = settings
     dp.include_router(onboarding_router)
+    dp.include_router(fallback_router)
     return dp
 
 
 async def main() -> None:
     """Run bot application with long polling and graceful shutdown."""
-    settings = Settings()  # type: ignore[call-arg]
+    settings = Settings()
     setup_logging(settings.log_level)
     logger.info("Starting Zeta Telegram Bot...")
 
     bot = create_bot(settings)
     dp = create_dispatcher(settings)
 
-    async with BackendClient(base_url=settings.backend_base_url) as backend_client:
+    async with BackendClient(
+        base_url=settings.backend_base_url,
+        timeout=settings.backend_timeout,
+    ) as backend_client:
         dp["backend_client"] = backend_client
 
         is_backend_up = await backend_client.healthcheck()

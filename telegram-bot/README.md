@@ -40,6 +40,7 @@
 |---|---|---|
 | `BOT_TOKEN` | *Обязательно* | Токен бота от BotFather |
 | `BACKEND_BASE_URL` | `http://localhost:8000` | Базовый URL API бэкенда Zeta |
+| `BACKEND_TIMEOUT` | `10.0` | Таймаут HTTP-запросов к бэкенду, секунд |
 | `WEB_APP_URL` | `http://localhost:3000` | URL веб-приложения Zeta для входа и онбординга |
 | `POLLING_TIMEOUT` | `30` | Таймаут long polling запросов (сек) |
 | `LOG_LEVEL` | `INFO` | Уровень логирования (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |

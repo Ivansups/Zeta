@@ -29,6 +29,30 @@ async def test_backend_client_healthcheck_unhealthy() -> None:
         assert is_healthy is False
 
 
+async def test_backend_client_healthcheck_non_json_response() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>proxy</html>")
+
+    transport = httpx.MockTransport(handler)
+    async with BackendClient(
+        base_url="http://testbackend", transport=transport
+    ) as client:
+        is_healthy = await client.healthcheck()
+        assert is_healthy is False
+
+
+async def test_backend_client_healthcheck_non_dict_json() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=["ok"])
+
+    transport = httpx.MockTransport(handler)
+    async with BackendClient(
+        base_url="http://testbackend", transport=transport
+    ) as client:
+        is_healthy = await client.healthcheck()
+        assert is_healthy is False
+
+
 async def test_backend_client_connection_error_handling() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("Connection refused")

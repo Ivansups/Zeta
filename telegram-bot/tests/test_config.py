@@ -12,6 +12,7 @@ def test_settings_valid_defaults() -> None:
     assert settings.polling_timeout == 30
     assert settings.log_level == "INFO"
     assert settings.telegram_proxy_url is None
+    assert settings.backend_timeout == 10.0
 
 
 def test_settings_custom_values() -> None:
@@ -22,6 +23,7 @@ def test_settings_custom_values() -> None:
         polling_timeout=45,
         log_level="DEBUG",
         telegram_proxy_url="https://proxy.example.com",
+        backend_timeout=25.5,
     )
     assert settings.bot_token.get_secret_value() == "123456:CUSTOM"
     assert settings.backend_base_url == "https://api.zeta.example.com"
@@ -29,6 +31,7 @@ def test_settings_custom_values() -> None:
     assert settings.polling_timeout == 45
     assert settings.log_level == "DEBUG"
     assert settings.telegram_proxy_url == "https://proxy.example.com"
+    assert settings.backend_timeout == 25.5
 
 
 def test_settings_aliases_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -38,14 +41,16 @@ def test_settings_aliases_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BOT_POLLING_TIMEOUT", "60")
     monkeypatch.setenv("BOT_LOG_LEVEL", "WARNING")
     monkeypatch.setenv("TG_PROXY_URL", "http://proxy-alias:8000")
+    monkeypatch.setenv("BACKEND_REQUEST_TIMEOUT", "7.5")
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = Settings()
     assert settings.bot_token.get_secret_value() == "123456:ALIAS_TOKEN"
     assert settings.backend_base_url == "http://backend-alias:8080"
     assert settings.web_app_url == "http://frontend-alias:3000"
     assert settings.polling_timeout == 60
     assert settings.log_level == "WARNING"
     assert settings.telegram_proxy_url == "http://proxy-alias:8000"
+    assert settings.backend_timeout == 7.5
 
 
 def test_settings_missing_token_raises_validation_error() -> None:
