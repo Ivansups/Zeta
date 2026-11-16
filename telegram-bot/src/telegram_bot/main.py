@@ -9,11 +9,15 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from telegram_bot.client import BackendClient
 from telegram_bot.config import Settings
 from telegram_bot.handlers.fallback import router as fallback_router
+from telegram_bot.handlers.homework import router as homework_router
 from telegram_bot.handlers.onboarding import router as onboarding_router
+from telegram_bot.handlers.questions import router as questions_router
+from telegram_bot.throttle import QuestionThrottle
 
 logger = logging.getLogger("telegram_bot")
 
@@ -43,9 +47,12 @@ def create_bot(settings: Settings) -> Bot:
 
 def create_dispatcher(settings: Settings) -> Dispatcher:
     """Create and configure Dispatcher with all registered routers and dependencies."""
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
     dp["settings"] = settings
+    dp["question_throttle"] = QuestionThrottle(settings.question_throttle_seconds)
     dp.include_router(onboarding_router)
+    dp.include_router(homework_router)
+    dp.include_router(questions_router)
     dp.include_router(fallback_router)
     return dp
 

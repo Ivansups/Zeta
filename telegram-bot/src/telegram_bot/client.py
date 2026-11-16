@@ -1,15 +1,53 @@
 """HTTP client for Zeta Backend REST API."""
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, ValidationError
+
+from telegram_bot.api_models import (
+    AskResponse,
+    BotUser,
+    ConfirmedHomework,
+    HomeworkDraft,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class BackendClientError(Exception):
     """Base exception for backend API client failures."""
+
+
+class BackendAPIError(BackendClientError):
+    """Backend responded with an HTTP error status."""
+
+    def __init__(self, status_code: int, detail: str) -> None:
+        """Store the HTTP status and human-readable detail."""
+        super().__init__(f"Backend API error {status_code}: {detail}")
+        self.status_code = status_code
+
+
+def _error_detail(response: httpx.Response) -> str:
+    try:
+        data = response.json()
+    except ValueError:
+        return response.text[:200]
+    if isinstance(data, dict) and "detail" in data:
+        return str(data["detail"])
+    return response.text[:200]
+
+
+def _validate_payload[ModelT: BaseModel](
+    model: type[ModelT], payload: dict[str, Any], path: str
+) -> ModelT:
+    try:
+        return model.model_validate(payload)
+    except ValidationError as err:
+        logger.error("Backend response from %s failed validation: %s", path, err)
+        raise BackendClientError(f"Backend response from {path} is invalid") from err
 
 
 class BackendClient:
@@ -75,3 +113,59 @@ class BackendClient:
         except httpx.HTTPError as err:
             logger.error("GET request to %s failed: %s", path, err)
             raise BackendClientError(f"Backend GET {path} failed: {err}") from err
+
+    async def _post_json(
+        self, path: str, payload: Mapping[str, object]
+    ) -> dict[str, Any]:
+        try:
+            response = await self._client.post(path, json=payload)
+        except httpx.HTTPError as err:
+            logger.error("POST request to %s failed: %s", path, err)
+            raise BackendClientError(f"Backend POST {path} failed: {err}") from err
+        if response.status_code >= 400:
+            detail = _error_detail(response)
+            logger.warning(
+                "Backend POST %s returned %s: %s", path, response.status_code, detail
+            )
+            raise BackendAPIError(response.status_code, detail)
+        try:
+            data = response.json()
+        except ValueError as err:
+            logger.error("Backend POST %s returned invalid JSON: %s", path, err)
+            raise BackendClientError(
+                f"Backend POST {path} returned invalid JSON"
+            ) from err
+        if not isinstance(data, dict):
+            raise BackendClientError(f"Backend POST {path} returned non-object JSON")
+        return data
+
+    async def get_telegram_user(self, telegram_id: int) -> BotUser:
+        """Resolve the Zeta user and role bound to a Telegram account."""
+        payload = await self._post_json(
+            "/auth/telegram/bot", {"telegram_id": telegram_id}
+        )
+        return _validate_payload(BotUser, payload, "/auth/telegram/bot")
+
+    async def parse_homework_draft(self, telegram_id: int, text: str) -> HomeworkDraft:
+        """Send free-form homework text to the backend for structuring."""
+        payload = await self._post_json(
+            "/homework/parse-draft", {"telegram_id": telegram_id, "text": text}
+        )
+        return _validate_payload(HomeworkDraft, payload, "/homework/parse-draft")
+
+    async def confirm_homework_draft(
+        self, telegram_id: int, draft_id: str
+    ) -> ConfirmedHomework:
+        """Persist a previously parsed homework draft."""
+        payload = await self._post_json(
+            "/homework/confirm-draft",
+            {"telegram_id": telegram_id, "draft_id": draft_id},
+        )
+        return _validate_payload(ConfirmedHomework, payload, "/homework/confirm-draft")
+
+    async def ask_question(self, telegram_id: int, question: str) -> AskResponse:
+        """Ask the LLM a question scoped to the user's group and subgroup."""
+        payload = await self._post_json(
+            "/llm/ask", {"telegram_id": telegram_id, "question": question}
+        )
+        return _validate_payload(AskResponse, payload, "/llm/ask")
