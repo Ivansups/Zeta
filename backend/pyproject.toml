@@ -7,8 +7,11 @@ dependencies = [
     "alembic>=1.20.0",
     "asyncpg>=0.32.0",
     "fastapi>=0.156.4",
+    "langchain-openai>=1.7.3",
+    "openpyxl>=3.1.5",
     "pydantic-settings>=2.16.1",
     "pyjwt[crypto]>=2.9.0",
+    "python-multipart>=0.0.33",
     "sqlalchemy[asyncio]>=2.1.5",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -27,6 +30,7 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "SIM", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106", "RUF001", "RUF003"]
 "migrations/versions/*" = ["I001"]
+"src/backend/schedule/**" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 strict = true
@@ -41,6 +45,7 @@ testpaths = ["tests"]
 dev = [
     "httpx>=0.28.1",
     "mypy>=2.4.0",
+    "openpyxl-stubs>=0.1.25",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.17.1",
