@@ -31,30 +31,91 @@ const SUBJECT_ALIASES: Array<{ keywords: string[]; lessonSubject: string }> = [
   },
 ];
 
-const WEEKDAY_DATES: Record<string, string> = {
-  понедельник: "2026-10-19",
-  пн: "2026-10-19",
-  вторник: "2026-10-20",
-  вт: "2026-10-20",
-  среда: "2026-10-21",
-  среду: "2026-10-21",
-  ср: "2026-10-21",
-  четверг: "2026-10-15",
-  четвергу: "2026-10-15",
-  чт: "2026-10-15",
-  пятниц: "2026-10-16",
-  пятнице: "2026-10-16",
-  пт: "2026-10-16",
-  суббот: "2026-10-17",
-  субботе: "2026-10-17",
-  сб: "2026-10-17",
-  сегодня: "2026-10-15",
-  завтра: "2026-10-16",
+const RUSSIAN_WEEKDAYS: Record<string, number> = {
+  понедельник: 1,
+  пн: 1,
+  вторник: 2,
+  вт: 2,
+  среда: 3,
+  среду: 3,
+  ср: 3,
+  четверг: 4,
+  четвергу: 4,
+  чт: 4,
+  пятниц: 5,
+  пятнице: 5,
+  пт: 5,
+  суббот: 6,
+  субботе: 6,
+  сб: 6,
+  воскресень: 0,
+  вс: 0,
 };
+
+function formatISODate(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function resolveTargetDate(
+  keyword: string,
+  availableLessons: Lesson[],
+  baseDate: Date = new Date(),
+): string | undefined {
+  const norm = keyword.toLowerCase();
+
+  if (norm.includes("сегодня")) {
+    const todayLesson = availableLessons.find((l) =>
+      l.dayLabel?.toLowerCase().includes("сегодня"),
+    );
+    if (todayLesson?.date) {
+      return todayLesson.date;
+    }
+    return formatISODate(baseDate);
+  }
+
+  if (norm.includes("завтра")) {
+    const tomorrowLesson = availableLessons.find((l) =>
+      l.dayLabel?.toLowerCase().includes("завтра"),
+    );
+    if (tomorrowLesson?.date) {
+      return tomorrowLesson.date;
+    }
+    const tomorrow = new Date(baseDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return formatISODate(tomorrow);
+  }
+
+  for (const [wName, targetDayNum] of Object.entries(RUSSIAN_WEEKDAYS)) {
+    if (norm.includes(wName)) {
+      const lessonOnDay = availableLessons.find((l) => {
+        const d = new Date(l.date);
+        return !isNaN(d.getTime()) && d.getDay() === targetDayNum;
+      });
+      if (lessonOnDay?.date) {
+        return lessonOnDay.date;
+      }
+
+      const nextDate = new Date(baseDate);
+      const currentDay = nextDate.getDay();
+      let diff = targetDayNum - currentDay;
+      if (diff <= 0) {
+        diff += 7;
+      }
+      nextDate.setDate(nextDate.getDate() + diff);
+      return formatISODate(nextDate);
+    }
+  }
+
+  return undefined;
+}
 
 export function parseHomeworkPrompt(
   prompt: string,
   availableLessons: Lesson[],
+  baseDate?: Date,
 ): ParsedHomeworkResult {
   const normalized = prompt.toLowerCase();
 
@@ -93,12 +154,7 @@ export function parseHomeworkPrompt(
   if (isoMatch) {
     dueDate = isoMatch[0];
   } else {
-    for (const [key, dateVal] of Object.entries(WEEKDAY_DATES)) {
-      if (normalized.includes(key)) {
-        dueDate = dateVal;
-        break;
-      }
-    }
+    dueDate = resolveTargetDate(normalized, availableLessons, baseDate);
   }
 
   if (!dueDate) {
