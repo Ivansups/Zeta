@@ -14,6 +14,14 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY . .
+
+# Build-time arguments for Next.js public client-side inlining
+ARG NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
+ENV NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME}
+
+ARG NEXT_PUBLIC_ENABLE_DEV_LOGIN
+ENV NEXT_PUBLIC_ENABLE_DEV_LOGIN=${NEXT_PUBLIC_ENABLE_DEV_LOGIN:-false}
+
 RUN pnpm exec next build
 
 RUN chown -R node:node /app

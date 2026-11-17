@@ -10,6 +10,16 @@ pnpm dev                              # http://localhost:3000
 pnpm lint && pnpm typecheck && pnpm test
 ```
 
+## Переменные окружения и Docker ARGs
+
+| Переменная / ARG | По умолчанию | Описание |
+|---|---|---|
+| `API_URL` | `http://localhost:8000` | Базовый URL бэкенда для Route Handler прокси (`src/app/api/...`) |
+| `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` | *пусто* | Имя Telegram-бота для виджета авторизации (Next.js build ARG / ENV) |
+| `NEXT_PUBLIC_ENABLE_DEV_LOGIN` | `false` | Включение тестового входа в dev-режиме (Next.js build ARG / ENV) |
+| `PORT` | `3000` | Порт HTTP-сервера |
+| `HOSTNAME` | `0.0.0.0` | Хост HTTP-сервера |
+
 ## API-прокси
 
 Route Handler `src/app/api/[...path]/route.ts` проксирует `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` и `OPTIONS` на backend. В `.env.local` задайте `API_URL` как origin FastAPI, например `API_URL=http://localhost:8000`. Запрос клиента к `/api/health?verbose=1` уйдёт на `http://localhost:8000/health?verbose=1`; токены и остальные прикладные заголовки передаются backend без локальной авторизации или базы данных.

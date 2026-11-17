@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-zeta_auth_bot}
     container_name: zeta-frontend
     restart: unless-stopped
     ports:
@@ -12,3 +14,8 @@ services:
       - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-zeta_auth_bot}
       - API_URL=${API_URL:-http://localhost:8000}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

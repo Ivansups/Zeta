@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zeta}
       POSTGRES_DB: ${POSTGRES_DB:-zeta}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -46,6 +46,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
     container_name: zeta-frontend
     restart: unless-stopped
     depends_on:
@@ -58,6 +60,11 @@ services:
       - HOSTNAME=0.0.0.0
       - API_URL=http://backend:8000
       - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   bot:
     build:
@@ -75,6 +82,7 @@ services:
       - BACKEND_TIMEOUT=10.0
       - DRAFT_TTL_SECONDS=900
       - QUESTION_THROTTLE_SECONDS=3.0
+      - TELEGRAM_PROXY_URL=${TELEGRAM_PROXY_URL:-}
 
 volumes:
   pgdata:
