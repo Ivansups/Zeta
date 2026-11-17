@@ -240,3 +240,61 @@ async def test_parse_rejects_workbook_without_schedule_sheets(
 
     assert response.status_code == 422
     assert "schedule" in response.json()["detail"].lower()
+
+
+async def test_import_and_query_schedule_endpoints(
+    client: AsyncClient, db_session: AsyncSession, test_settings: Settings
+) -> None:
+    """Import endpoint persists schedule and query endpoints return day and week."""
+    wb, ws = _new_workbook()
+    ws["A5"] = "Понедельник"
+    ws["B5"] = "8:00 - 9:35"
+    ws["C5"] = "Введение в программирование (id=10570) ст.преп. Соломатин Д.И. (ДО)"
+    ws.merge_cells("C5:D5")
+    ws["C6"] = "Технологии искусственного интеллекта  асс. Крутаков Р.С.  295"
+    ws["D6"] = "Моделирование бизнес-процессов доц. Громковский А.А. 314П"
+    ws.merge_cells("A5:A6")
+    ws.merge_cells("B5:B6")
+
+    admin_headers = await _admin_headers(db_session, test_settings)
+
+    # 1. Import
+    import_resp = await client.post(
+        "/schedule/import",
+        headers=admin_headers,
+        files={"file": ("schedule.xlsx", _to_bytes(wb), XLSX_MIME)},
+    )
+    assert import_resp.status_code == 200, import_resp.text
+    import_data = import_resp.json()
+    assert import_data["status"] == "ok"
+    assert import_data["groups_processed"] == 2
+    assert import_data["pairs_saved"] == 4
+
+    # 2. Query Day Schedule
+    day_resp = await client.get(
+        "/schedule/day",
+        params={"group_name": "1 группа", "day": "Понедельник"},
+    )
+    assert day_resp.status_code == 200, day_resp.text
+    pairs = day_resp.json()
+    assert len(pairs) == 2
+    subjects = [p["subject"] for p in pairs]
+    assert "Введение в программирование" in subjects
+    assert "Технологии искусственного интеллекта" in subjects
+
+    # 3. Query Week Schedule
+    week_resp = await client.get(
+        "/schedule/week",
+        params={"group_name": "1 группа"},
+    )
+    assert week_resp.status_code == 200, week_resp.text
+    assert len(week_resp.json()) == 2
+
+    # 4. Idempotent re-import
+    reimport_resp = await client.post(
+        "/schedule/import",
+        headers=admin_headers,
+        files={"file": ("schedule.xlsx", _to_bytes(wb), XLSX_MIME)},
+    )
+    assert reimport_resp.status_code == 200
+    assert reimport_resp.json()["pairs_saved"] == 4
