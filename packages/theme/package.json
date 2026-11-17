@@ -1,0 +1,17 @@
+{
+  "name": "@zeta/theme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Единый источник дизайн-токенов Zeta для веба (CSS) и React Native (StyleSheet)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./css": "./src/css.ts"
+  },
+  "types": "./src/index.ts",
+  "sideEffects": false,
+  "scripts": {
+    "build:css": "node scripts/generate.ts",
+    "check:css": "node scripts/generate.ts --check"
+  }
+}
