@@ -13,6 +13,8 @@ def test_settings_valid_defaults() -> None:
     assert settings.log_level == "INFO"
     assert settings.telegram_proxy_url is None
     assert settings.backend_timeout == 10.0
+    assert settings.draft_ttl_seconds == 900
+    assert settings.question_throttle_seconds == 3.0
 
 
 def test_settings_custom_values() -> None:
@@ -42,6 +44,8 @@ def test_settings_aliases_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BOT_LOG_LEVEL", "WARNING")
     monkeypatch.setenv("TG_PROXY_URL", "http://proxy-alias:8000")
     monkeypatch.setenv("BACKEND_REQUEST_TIMEOUT", "7.5")
+    monkeypatch.setenv("DRAFT_TTL_SECONDS", "120")
+    monkeypatch.setenv("QUESTION_THROTTLE_SECONDS", "1.5")
 
     settings = Settings()
     assert settings.bot_token.get_secret_value() == "123456:ALIAS_TOKEN"
@@ -51,6 +55,8 @@ def test_settings_aliases_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.log_level == "WARNING"
     assert settings.telegram_proxy_url == "http://proxy-alias:8000"
     assert settings.backend_timeout == 7.5
+    assert settings.draft_ttl_seconds == 120
+    assert settings.question_throttle_seconds == 1.5
 
 
 def test_settings_missing_token_raises_validation_error() -> None:
