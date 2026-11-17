@@ -1,11 +1,67 @@
 # telegram-bot
 
-Thin Telegram client over the backend API (long polling). No business logic, no direct DB or LLM access.
+Тонкий клиент к платформе Zeta через Telegram Bot API (режим long polling).
+Пакет не содержит собственной базы данных и бизнес-логики, взаимодействует исключительно через REST API бэкенда Zeta.
 
-Owner: Ульянченко.
+Владелец: Ульянченко Даниил (@DLqwerty).
+
+## Требования
+
+- Python >= 3.13
+- Менеджер пакетов `uv`
+- Токен Telegram-бота от [@BotFather](https://t.me/BotFather)
+
+## Локальный запуск
+
+1. Перейдите в каталог пакета:
+   ```bash
+   cd telegram-bot
+   ```
+
+2. Установите зависимости:
+   ```bash
+   uv sync
+   ```
+
+3. Создайте `.env` файл на основе шаблона:
+   ```bash
+   cp .env.example .env
+   ```
+   Укажите ваш `BOT_TOKEN` в файле `.env`.
+
+4. Запустите бота:
+   ```bash
+   uv run python -m telegram_bot.main
+   ```
+
+## Переменные окружения
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `BOT_TOKEN` | *Обязательно* | Токен бота от BotFather |
+| `BACKEND_BASE_URL` | `http://localhost:8000` | Базовый URL API бэкенда Zeta |
+| `BACKEND_TIMEOUT` | `10.0` | Таймаут HTTP-запросов к бэкенду, секунд |
+| `WEB_APP_URL` | `http://localhost:3000` | URL веб-приложения Zeta для входа и онбординга |
+| `POLLING_TIMEOUT` | `30` | Таймаут long polling запросов (сек) |
+| `LOG_LEVEL` | `INFO` | Уровень логирования (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `TELEGRAM_PROXY_URL` | *None* | Опциональный reverse proxy для Telegram Bot API (например, Cloudflare Worker) |
+| `DRAFT_TTL_SECONDS` | `900` | Время жизни черновика ДЗ до автосброса, секунд |
+| `QUESTION_THROTTLE_SECONDS` | `3.0` | Минимальный интервал между вопросами одного пользователя, секунд |
+
+## Сценарии
+
+- **Ввод ДЗ текстом.** Староста или помощник отправляет сообщение, начинающееся с «ДЗ» (например, `ДЗ матан: номер 12 к среде`). Бот показывает карточку черновика с кнопками «Подтвердить», «Редактировать», «Отмена». Запись создаётся только после подтверждения.
+- **Вопросы студентов.** Сообщения-вопросы («что задали на неделю?») уходят в LLM через бэкенд и возвращаются структурированным списком заданий по дням. Частые запросы троттлятся.
+
+> Контракты `POST /auth/telegram/bot`, `POST /homework/parse-from-text`, `POST /homework/confirm-draft` и `POST /llm/ask` реализованы в `backend` (FastAPI). В тестах клиента бота используются моки httpx.
+
+## Тестирование и линтинг
+
+Согласно `AGENTS.md`, перед коммитом все проверки должны быть чистыми:
 
 ```bash
-uv sync                                          # install deps
-uv run pytest                                    # tests
-uv run ruff check . && uv run ruff format --check . && uv run mypy .
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy .
 ```

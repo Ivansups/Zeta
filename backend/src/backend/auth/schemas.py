@@ -87,3 +87,14 @@ class InviteResponse(BaseModel):
     is_revoked: bool
     activations_count: int
     created_at: datetime
+
+
+class TelegramBotAuthRequest(BaseModel):
+    telegram_id: int
+
+
+class BotUserResponse(BaseModel):
+    telegram_id: int
+    role: str
+    group_id: str | None = None
+    subgroup: int | None = None
