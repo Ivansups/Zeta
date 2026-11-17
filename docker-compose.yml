@@ -59,5 +59,22 @@ services:
       - API_URL=http://backend:8000
       - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
 
+  bot:
+    build:
+      context: ./telegram-bot
+      dockerfile: Dockerfile
+    container_name: zeta-bot
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-mock-bot-token}
+      - BACKEND_BASE_URL=http://backend:8000
+      - WEB_APP_URL=${WEB_APP_URL:-http://frontend:3000}
+      - BACKEND_TIMEOUT=10.0
+      - DRAFT_TTL_SECONDS=900
+      - QUESTION_THROTTLE_SECONDS=3.0
+
 volumes:
   pgdata:

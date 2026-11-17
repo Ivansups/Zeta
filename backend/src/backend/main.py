@@ -1,11 +1,15 @@
 from fastapi import FastAPI
 
 from backend.auth.router import router as auth_router
+from backend.homework.router import router as homework_router
+from backend.llm.router import router as llm_router
 from backend.schedule.router import router as schedule_router
 
 app = FastAPI(title="Zeta")
 
 app.include_router(auth_router)
+app.include_router(homework_router)
+app.include_router(llm_router)
 app.include_router(schedule_router)
 
 
