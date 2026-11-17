@@ -1,0 +1,152 @@
+import { SchedulePair, User } from "../types";
+
+export const MOCK_USERS: Record<string, User> = {
+  student_1: {
+    id: "usr-001",
+    telegramId: "student_101",
+    username: "ivan_student",
+    firstName: "Иван",
+    lastName: "Иванов",
+    role: "student",
+    groupId: "grp-iu5-11b",
+    groupName: "ИУ5-11Б",
+    subgroup: 1,
+  },
+  student_2: {
+    id: "usr-002",
+    telegramId: "student_102",
+    username: "anna_student",
+    firstName: "Анна",
+    lastName: "Смирнова",
+    role: "student",
+    groupId: "grp-iu5-11b",
+    groupName: "ИУ5-11Б",
+    subgroup: 2,
+  },
+  elder: {
+    id: "usr-003",
+    telegramId: "elder_777",
+    username: "alex_elder",
+    firstName: "Алексей",
+    lastName: "Старостин",
+    role: "elder",
+    groupId: "grp-iu5-11b",
+    groupName: "ИУ5-11Б",
+    subgroup: 1,
+  },
+};
+
+export const MOCK_SCHEDULE: SchedulePair[] = [
+  // Понедельник
+  {
+    id: "pair-mon-1",
+    pairNumber: 1,
+    timeStart: "08:30",
+    timeEnd: "10:05",
+    subject: "Математический анализ",
+    teacher: "Кузнецов А.П.",
+    classroom: "ауд. 301л",
+    day: "monday",
+  },
+  {
+    id: "pair-mon-2",
+    pairNumber: 2,
+    timeStart: "10:20",
+    timeEnd: "11:55",
+    subject: "Алгоритмы и структуры данных (Лекция)",
+    teacher: "Смирнов В.И.",
+    classroom: "ауд. 415л",
+    day: "monday",
+  },
+  {
+    id: "pair-mon-3",
+    pairNumber: 3,
+    timeStart: "12:10",
+    timeEnd: "13:45",
+    subject: "Программирование на C++ (Лаб)",
+    teacher: "Николаев Д.С.",
+    classroom: "ауд. 204ю",
+    day: "monday",
+    subgroup: 1,
+  },
+  {
+    id: "pair-mon-3b",
+    pairNumber: 3,
+    timeStart: "12:10",
+    timeEnd: "13:45",
+    subject: "Иностранный язык",
+    teacher: "Джонсон М.",
+    classroom: "ауд. 102л",
+    day: "monday",
+    subgroup: 2,
+  },
+
+  // Вторник
+  {
+    id: "pair-tue-1",
+    pairNumber: 1,
+    timeStart: "10:20",
+    timeEnd: "11:55",
+    subject: "Дискретная математика",
+    teacher: "Иванова Е.В.",
+    classroom: "ауд. 502",
+    day: "tuesday",
+  },
+  {
+    id: "pair-tue-2",
+    pairNumber: 2,
+    timeStart: "12:10",
+    timeEnd: "13:45",
+    subject: "Физика (Семинар)",
+    teacher: "Петров С.Н.",
+    classroom: "ауд. 210",
+    day: "tuesday",
+  },
+
+  // Среда
+  {
+    id: "pair-wed-1",
+    pairNumber: 2,
+    timeStart: "10:20",
+    timeEnd: "11:55",
+    subject: "Базы данных (Лекция)",
+    teacher: "Григорьев М.К.",
+    classroom: "ауд. 312л",
+    day: "wednesday",
+  },
+  {
+    id: "pair-wed-2",
+    pairNumber: 3,
+    timeStart: "12:10",
+    timeEnd: "13:45",
+    subject: "Базы данных (Лаб)",
+    teacher: "Григорьев М.К.",
+    classroom: "ауд. 206ю",
+    day: "wednesday",
+    subgroup: 2,
+  },
+
+  // Четверг
+  {
+    id: "pair-thu-1",
+    pairNumber: 1,
+    timeStart: "08:30",
+    timeEnd: "10:05",
+    subject: "Инженерная графика",
+    teacher: "Соколова Т.А.",
+    classroom: "ауд. 418",
+    day: "thursday",
+  },
+
+  // Пятница
+  {
+    id: "pair-fri-1",
+    pairNumber: 2,
+    timeStart: "10:20",
+    timeEnd: "11:55",
+    subject: "Операционные системы",
+    teacher: "Васильев О.Р.",
+    classroom: "ауд. 305л",
+    day: "friday",
+  },
+];
