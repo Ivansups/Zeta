@@ -4,72 +4,104 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
-  GraduationCap,
-  MapPin,
   Plus,
   Sparkles,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { lessons, weekDays } from "@/lib/mock-data";
 import type { HomeworkDraft, Lesson, Subgroup } from "@/lib/types";
 
 import { HomeworkEditor } from "./homework-editor";
-
-function LessonCard({ lesson }: { lesson: Lesson }): React.JSX.Element {
-  return (
-    <article className={`lesson-card accent-${lesson.accent}`}>
-      <div className="lesson-time">
-        <strong>{lesson.time}</strong>
-        <span>{lesson.endTime}</span>
-      </div>
-      <div className="lesson-main">
-        <div className="lesson-heading">
-          <div>
-            <span className="lesson-kind">{lesson.kind}</span>
-            <h3>{lesson.subject}</h3>
-          </div>
-          {lesson.subgroup === "all" ? (
-            <span className="quiet-badge">Вся группа</span>
-          ) : (
-            <span className="quiet-badge">Подгруппа {lesson.subgroup}</span>
-          )}
-        </div>
-        <p className="lesson-meta">
-          <span><MapPin size={14} strokeWidth={1.8} />{lesson.location}</span>
-          <span><GraduationCap size={14} strokeWidth={1.8} />{lesson.teacher}</span>
-        </p>
-        {lesson.homework ? (
-          <div className="homework-inline">
-            <BookOpen size={16} strokeWidth={1.8} />
-            <div>
-              <strong>Домашнее задание</strong>
-              <p>{lesson.homework.description}</p>
-            </div>
-          </div>
-        ) : (
-          <p className="no-homework">Домашнего задания пока нет</p>
-        )}
-      </div>
-    </article>
-  );
-}
+import { LessonCard } from "./lesson-card";
 
 export function ScheduleDashboard(): React.JSX.Element {
   const [subgroup, setSubgroup] = useState<Subgroup>(1);
   const [view, setView] = useState<"day" | "week">("day");
-  const [editorOpen, setEditorOpen] = useState(false);
+  const [lessonList, setLessonList] = useState<Lesson[]>(lessons);
+  const [editorState, setEditorState] = useState<{
+    open: boolean;
+    mode?: "form" | "assistant";
+    initialData?: {
+      id?: string;
+      lessonId?: string;
+      subgroup?: Subgroup | "all";
+      description?: string;
+      dueDate?: string;
+    } | null;
+  }>({ open: false, mode: "form", initialData: null });
   const [savedMessage, setSavedMessage] = useState("");
 
+  useEffect(() => {
+    if (savedMessage) {
+      const timer = setTimeout(() => {
+        setSavedMessage("");
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [savedMessage]);
+
   const visibleLessons = useMemo(
-    () => lessons.filter((lesson) => lesson.subgroup === "all" || lesson.subgroup === subgroup),
-    [subgroup],
+    () => lessonList.filter((lesson) => lesson.subgroup === "all" || lesson.subgroup === subgroup),
+    [lessonList, subgroup],
   );
 
+  function handleAddHomework(lesson: Lesson): void {
+    setEditorState({
+      open: true,
+      mode: "form",
+      initialData: {
+        lessonId: lesson.id,
+        subgroup: lesson.subgroup,
+        dueDate: lesson.date,
+        description: "",
+      },
+    });
+  }
+
+  function handleEditHomework(lesson: Lesson): void {
+    if (!lesson.homework) {
+      return;
+    }
+    setEditorState({
+      open: true,
+      mode: "form",
+      initialData: {
+        id: lesson.homework.id,
+        lessonId: lesson.id,
+        subgroup: lesson.subgroup,
+        dueDate: lesson.homework.dueDate ?? lesson.date,
+        description: lesson.homework.description,
+      },
+    });
+  }
+
   function handleSave(draft: HomeworkDraft): void {
-    const lesson = lessons.find((item) => item.id === draft.lessonId);
-    setEditorOpen(false);
-    setSavedMessage(`Задание для «${lesson?.subject ?? "пары"}» сохранено`);
+    const isEdit = Boolean(draft.id);
+
+    setLessonList((prevLessons) =>
+      prevLessons.map((item) => {
+        if (item.id === draft.lessonId) {
+          return {
+            ...item,
+            homework: {
+              id: draft.id || item.homework?.id || `hw-${draft.lessonId}`,
+              description: draft.description,
+              dueDate: draft.dueDate,
+              subgroup: draft.subgroup,
+            },
+          };
+        }
+        return item;
+      }),
+    );
+
+    const lesson = lessonList.find((item) => item.id === draft.lessonId);
+    setEditorState({ open: false, mode: "form", initialData: null });
+    const message = isEdit
+      ? `Задание для «${lesson?.subject ?? "пары"}» обновлено`
+      : `Задание для «${lesson?.subject ?? "пары"}» сохранено`;
+    setSavedMessage(message);
   }
 
   return (
@@ -84,7 +116,7 @@ export function ScheduleDashboard(): React.JSX.Element {
           <button
             className="button button-secondary assistant-button"
             type="button"
-            onClick={() => setEditorOpen(true)}
+            onClick={() => setEditorState({ open: true, mode: "assistant", initialData: null })}
           >
             <Sparkles size={16} strokeWidth={1.8} />
             Zeta AI
@@ -92,7 +124,7 @@ export function ScheduleDashboard(): React.JSX.Element {
           <button
             className="button button-primary"
             type="button"
-            onClick={() => setEditorOpen(true)}
+            onClick={() => setEditorState({ open: true, mode: "form", initialData: null })}
           >
             <Plus size={16} strokeWidth={2} />
             Добавить ДЗ
@@ -176,7 +208,12 @@ export function ScheduleDashboard(): React.JSX.Element {
             {visibleLessons
               .filter((lesson) => lesson.date === "2026-10-15")
               .map((lesson) => (
-                <LessonCard key={lesson.id} lesson={lesson} />
+                <LessonCard
+                  key={lesson.id}
+                  lesson={lesson}
+                  onAddHomework={handleAddHomework}
+                  onEditHomework={handleEditHomework}
+                />
               ))}
           </div>
 
@@ -237,7 +274,13 @@ export function ScheduleDashboard(): React.JSX.Element {
       )}
 
       {savedMessage ? <div className="toast" role="status">{savedMessage}</div> : null}
-      <HomeworkEditor open={editorOpen} onClose={() => setEditorOpen(false)} onSave={handleSave} />
+      <HomeworkEditor
+        open={editorState.open}
+        initialMode={editorState.mode}
+        initialData={editorState.initialData}
+        onClose={() => setEditorState({ open: false, mode: "form", initialData: null })}
+        onSave={handleSave}
+      />
     </div>
   );
 }
