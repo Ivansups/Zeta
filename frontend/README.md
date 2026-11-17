@@ -10,6 +10,15 @@ pnpm dev                              # http://localhost:3000
 pnpm lint && pnpm typecheck && pnpm test
 ```
 
+### Тема
+
+CSS-переменные и TS-константы генерируются из `packages/theme/src/tokens.ts`:
+
+```bash
+pnpm theme:css     # пересобрать артефакты после правки токенов
+pnpm theme:check   # проверить рассинхрон (запускается и в тестах)
+```
+
 ## Переменные окружения и Docker ARGs
 
 | Переменная / ARG | По умолчанию | Описание |
