@@ -905,6 +905,34 @@ a {
   margin-top: 2px;
 }
 
+.homework-inline-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.homework-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.homework-edit-btn {
+  background: none;
+  border: none;
+  color: var(--card-accent);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  transition: background-color var(--duration-fast) var(--ease-spring);
+}
+
+.homework-edit-btn:hover {
+  background: color-mix(in srgb, var(--card-accent) 15%, transparent);
+}
+
 .homework-inline strong {
   display: block;
   color: var(--card-accent);
@@ -919,10 +947,39 @@ a {
   color: var(--foreground);
 }
 
+.lesson-homework-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.lesson-add-hw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-spring);
+}
+
+.lesson-add-hw-btn:hover {
+  background: var(--surface);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .no-homework {
   color: var(--muted-soft);
   font-size: 13px;
-  margin: 12px 0 0;
+  margin: 0;
   font-style: normal;
 }
 
@@ -1235,6 +1292,7 @@ a {
 }
 
 .editor-form textarea,
+.editor-form input,
 .picker-frame select {
   width: 100%;
   border: 1px solid var(--border);
@@ -1245,10 +1303,19 @@ a {
 }
 
 .editor-form textarea:focus,
+.editor-form input:focus,
 .picker-frame select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
   outline: none;
+}
+
+.editor-form input {
+  height: 48px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0 16px;
+  margin-bottom: 16px;
 }
 
 .editor-form textarea {
@@ -1303,6 +1370,38 @@ a {
   line-height: 1.45;
   margin: 0;
   color: var(--foreground);
+}
+
+.assistant-preview-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: var(--radius-md);
+  background: var(--accent-violet-soft);
+  border: 1px solid var(--accent-violet-border);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  color: var(--accent-violet);
+  animation: card-enter var(--duration-fast) var(--ease-spring);
+}
+
+.assistant-preview-banner svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.assistant-preview-banner strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.assistant-preview-banner p {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 2px 0 0;
+  color: var(--muted);
 }
 
 .field-error {
