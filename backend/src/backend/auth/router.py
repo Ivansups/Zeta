@@ -12,6 +12,7 @@ from fastapi import (
     status,
 )
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import (
     RequireAdmin,
@@ -22,12 +23,14 @@ from backend.auth.dependencies import (
 )
 from backend.auth.models import InviteToken, RoleEnum, User
 from backend.auth.schemas import (
+    BotUserResponse,
     ElderInviteCreateRequest,
     GroupCreateRequest,
     GroupResponse,
     InviteResponse,
     RoleInviteCreateRequest,
     StudentInviteCreateRequest,
+    TelegramBotAuthRequest,
     TelegramWebAppAuthRequest,
     TelegramWidgetAuthRequest,
     TokenResponse,
@@ -39,6 +42,7 @@ from backend.auth.security import (
 )
 from backend.auth.service import AuthService
 from backend.config import Settings
+from backend.db.session import get_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -390,3 +394,29 @@ async def revoke_invite(
         ) from err
 
     return {"status": "revoked"}
+
+
+@router.post("/telegram/bot", response_model=BotUserResponse)
+async def get_telegram_bot_user(
+    payload: TelegramBotAuthRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> BotUserResponse:
+    """Resolve user role and group affiliation for Telegram Bot requests."""
+    stmt = select(User).where(User.telegram_id == payload.telegram_id)
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        return BotUserResponse(
+            telegram_id=payload.telegram_id,
+            role="guest",
+            group_id=None,
+            subgroup=None,
+        )
+
+    return BotUserResponse(
+        telegram_id=user.telegram_id,
+        role=user.role,
+        group_id=str(user.group_id) if user.group_id else None,
+        subgroup=user.subgroup_number,
+    )
