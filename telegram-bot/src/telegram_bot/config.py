@@ -54,6 +54,18 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("TELEGRAM_PROXY_URL", "TG_PROXY_URL"),
         description="Optional proxy URL for Telegram Bot API requests",
     )
+    draft_ttl_seconds: int = Field(
+        default=900,
+        ge=1,
+        validation_alias=AliasChoices("DRAFT_TTL_SECONDS", "HOMEWORK_DRAFT_TTL"),
+        description="How long a homework draft stays valid, in seconds",
+    )
+    question_throttle_seconds: float = Field(
+        default=3.0,
+        ge=0,
+        validation_alias=AliasChoices("QUESTION_THROTTLE_SECONDS"),
+        description="Minimum interval between student questions, in seconds",
+    )
 
     @field_validator("bot_token")
     @classmethod

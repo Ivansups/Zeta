@@ -15,7 +15,10 @@ def test_create_dispatcher() -> None:
 
     sub_router_names = [r.name for r in dp.sub_routers]
     assert "onboarding" in sub_router_names
+    assert "homework" in sub_router_names
+    assert "questions" in sub_router_names
     assert sub_router_names[-1] == "fallback"
+    assert dp.get("question_throttle") is not None
 
 
 def test_create_bot_standard() -> None:
