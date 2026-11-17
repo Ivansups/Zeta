@@ -4,14 +4,23 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import get_current_user
 from backend.auth.models import User
 from backend.db.session import get_session
 from backend.homework.models import Homework
-from backend.homework.schemas import HomeworkCreate, HomeworkRead, HomeworkUpdate
+from backend.homework.schemas import (
+    ConfirmedHomeworkResponse,
+    HomeworkConfirmRequest,
+    HomeworkCreate,
+    HomeworkDraftResponse,
+    HomeworkParseRequest,
+    HomeworkRead,
+    HomeworkUpdate,
+)
 from backend.homework.service import HomeworkService
 
 router = APIRouter(prefix="/homework", tags=["homework"])
@@ -104,3 +113,39 @@ async def delete_homework(
     """Delete a homework assignment (elder, helper or admin)."""
     service = HomeworkService(session=session)
     await service.delete_homework(user=current_user, homework_id=homework_id)
+
+
+@router.post("/parse-from-text", response_model=HomeworkDraftResponse)
+async def parse_homework_from_text(
+    payload: HomeworkParseRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HomeworkDraftResponse:
+    """Parse unstructured homework text from Telegram Bot."""
+    stmt = select(User).where(User.telegram_id == payload.telegram_id)
+    res = await session.execute(stmt)
+    user = res.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not registered in Zeta",
+        )
+    service = HomeworkService(session=session)
+    return service.parse_text_to_draft(text=payload.text, user=user)
+
+
+@router.post("/confirm-draft", response_model=ConfirmedHomeworkResponse)
+async def confirm_homework_draft(
+    payload: HomeworkConfirmRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ConfirmedHomeworkResponse:
+    """Confirm and persist a parsed homework draft."""
+    stmt = select(User).where(User.telegram_id == payload.telegram_id)
+    res = await session.execute(stmt)
+    user = res.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not registered in Zeta",
+        )
+    service = HomeworkService(session=session)
+    return await service.confirm_draft(user=user, draft_id=payload.draft_id)

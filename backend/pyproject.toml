@@ -31,6 +31,8 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "SIM", "RUF"]
 "tests/**" = ["S101", "S105", "S106", "RUF001", "RUF003"]
 "migrations/versions/*" = ["I001"]
 "src/backend/schedule/**" = ["RUF001", "RUF002", "RUF003"]
+"src/backend/homework/**" = ["RUF001", "RUF002", "RUF003"]
+"src/backend/llm/**" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 strict = true

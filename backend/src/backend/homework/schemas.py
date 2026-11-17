@@ -46,3 +46,31 @@ class HomeworkRead(BaseModel):
     created_by_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class HomeworkParseRequest(BaseModel):
+    telegram_id: int
+    text: str
+
+
+class HomeworkDraftResponse(BaseModel):
+    draft_id: str
+    subject: str
+    description: str
+    deadline: datetime | None = None
+    pair_number: int | None = None
+    subgroup: int | None = None
+
+
+class HomeworkConfirmRequest(BaseModel):
+    telegram_id: int
+    draft_id: str
+
+
+class ConfirmedHomeworkResponse(BaseModel):
+    id: str
+    subject: str
+    description: str = ""
+    deadline: datetime | None = None
+    pair_number: int | None = None
+    subgroup: int | None = None

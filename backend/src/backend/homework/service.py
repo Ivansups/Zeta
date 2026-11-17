@@ -1,7 +1,9 @@
 """Service for homework CRUD operations with role-based access control."""
 
+import re
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from typing import Any, ClassVar
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -10,7 +12,12 @@ from sqlalchemy.orm import selectinload
 
 from backend.auth.models import RoleEnum, User
 from backend.homework.models import Homework
-from backend.homework.schemas import HomeworkCreate, HomeworkUpdate
+from backend.homework.schemas import (
+    ConfirmedHomeworkResponse,
+    HomeworkCreate,
+    HomeworkDraftResponse,
+    HomeworkUpdate,
+)
 from backend.schedule.db_models import SchedulePair
 
 
@@ -216,3 +223,150 @@ class HomeworkService:
 
         await self.session.delete(hw)
         await self.session.commit()
+
+    _DRAFT_CACHE: ClassVar[dict[str, dict[str, Any]]] = {}
+
+    def parse_text_to_draft(self, text: str, user: User) -> HomeworkDraftResponse:
+        """Parse unstructured homework text into structured draft."""
+        if not user.group_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User has no group assigned",
+            )
+        if not self._is_privileged_for_group(user, user.group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only elder, helper or admin may create homework drafts",
+            )
+
+        norm = text.lower()
+        subject_aliases = [
+            (["матан", "математик", "матанализ"], "Математический анализ"),
+            (["питон", "python", "пайтон"], "Программирование на Python"),
+            (["алгоритм", "структур", "аисд"], "Алгоритмы и структуры данных"),
+            (["англ", "english", "инглиш"], "Английский язык"),
+            (["дискрет", "кнф", "днф"], "Дискретная математика"),
+            (["истор"], "История России"),
+        ]
+
+        subject = "Домашнее задание"
+        for keywords, alias in subject_aliases:
+            if any(kw in norm for kw in keywords):
+                subject = alias
+                break
+
+        subgroup: int | None = None
+        if re.search(
+            r"(\b1\s*подгрупп|подгрупп[а-я]*\s*1|перв[а-я]*\s*подгрупп)", norm
+        ):
+            subgroup = 1
+        elif re.search(
+            r"(\b2\s*подгрупп|подгрупп[а-я]*\s*2|втор[а-я]*\s*подгрупп)", norm
+        ):
+            subgroup = 2
+
+        now = datetime.now(UTC)
+        deadline: datetime = (now + timedelta(days=1)).replace(
+            hour=23, minute=59, second=0, microsecond=0
+        )
+
+        weekday_map = {
+            "понедельник": 0,
+            "пн": 0,
+            "вторник": 1,
+            "вт": 1,
+            "среда": 2,
+            "среду": 2,
+            "ср": 2,
+            "четверг": 3,
+            "четвергу": 3,
+            "чт": 3,
+            "пятниц": 4,
+            "пятнице": 4,
+            "пт": 4,
+            "суббот": 5,
+            "субботе": 5,
+            "сб": 5,
+            "воскресень": 6,
+            "вс": 6,
+        }
+
+        for w_name, w_idx in weekday_map.items():
+            if w_name in norm:
+                diff = (w_idx - now.weekday()) % 7
+                if diff == 0:
+                    diff = 7
+                deadline = (now + timedelta(days=diff)).replace(
+                    hour=23, minute=59, second=0, microsecond=0
+                )
+                break
+
+        cleaned = re.sub(r"(?i)^дз[:\s]*", "", text).strip()
+        cleaned = re.sub(
+            r"(?i)(?:для\s*)?(?:[12]\s*подгрупп[а-я]*|вся\s*группа|для\s*всех)",
+            "",
+            cleaned,
+        ).strip()
+        cleaned = re.sub(
+            r"(?i)(?:по\s*)?(?:матану?|математике?|питону?|python|алгоритмам?|аисд|английскому?|english|дискретке?|истории?)",
+            "",
+            cleaned,
+        ).strip()
+        cleaned = re.sub(
+            r"(?i)(?:к|на)\s*(?:четвергу?|пятнице?|субботе?|понедельнику?|вторнику?|среде?|завтра|сегодня)",
+            "",
+            cleaned,
+        ).strip(" ,.:;-")
+
+        if len(cleaned) < 3:
+            cleaned = text.strip()
+
+        draft_id = str(uuid.uuid4())
+        self._DRAFT_CACHE[draft_id] = {
+            "subject": subject,
+            "description": cleaned,
+            "deadline": deadline,
+            "subgroup": subgroup,
+            "group_id": user.group_id,
+            "created_by_id": user.id,
+        }
+
+        return HomeworkDraftResponse(
+            draft_id=draft_id,
+            subject=subject,
+            description=cleaned,
+            deadline=deadline,
+            subgroup=subgroup,
+        )
+
+    async def confirm_draft(
+        self, user: User, draft_id: str
+    ) -> ConfirmedHomeworkResponse:
+        """Confirm and persist a draft to the database."""
+        draft = self._DRAFT_CACHE.pop(draft_id, None)
+        if not draft:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Draft not found or expired",
+            )
+
+        hw = Homework(
+            group_id=draft["group_id"],
+            title=draft["subject"],
+            description=draft["description"],
+            subject=draft["subject"],
+            deadline=draft["deadline"],
+            subgroup=draft["subgroup"],
+            created_by_id=user.id,
+        )
+        self.session.add(hw)
+        await self.session.commit()
+        await self.session.refresh(hw)
+
+        return ConfirmedHomeworkResponse(
+            id=str(hw.id),
+            subject=hw.subject or hw.title,
+            description=hw.description,
+            deadline=hw.deadline,
+            subgroup=hw.subgroup,
+        )
