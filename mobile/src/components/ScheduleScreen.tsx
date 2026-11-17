@@ -25,12 +25,18 @@ export function ScheduleScreen({
 }: ScheduleScreenProps): React.JSX.Element {
   const [selectedDay, setSelectedDay] = useState<DayOfWeek>("monday");
   const [pairs, setPairs] = useState<SchedulePair[]>([]);
+  const [daysWithHw, setDaysWithHw] = useState<DayOfWeek[]>([]);
 
   useEffect(() => {
     let isMounted = true;
     void api.getSchedule(selectedDay, subgroup).then((data: SchedulePair[]) => {
       if (isMounted) {
         setPairs(data);
+      }
+    });
+    void api.getDaysWithHomework(subgroup).then((hwDays: DayOfWeek[]) => {
+      if (isMounted) {
+        setDaysWithHw(hwDays);
       }
     });
     return () => {
@@ -73,10 +79,11 @@ export function ScheduleScreen({
         </TouchableOpacity>
       </View>
 
-      {/* Полоса дней недели (Week Strip) */}
+      {/* Полоса дней недели (Week Strip) с индикатором ДЗ */}
       <View style={styles.weekStrip}>
         {DAYS.map((day) => {
           const isActive = selectedDay === day.key;
+          const hasHw = daysWithHw.includes(day.key);
           return (
             <TouchableOpacity
               key={day.key}
@@ -90,6 +97,12 @@ export function ScheduleScreen({
               <Text style={[styles.weekDayDate, isActive && styles.weekDayDateActive]}>
                 {day.date}
               </Text>
+              {hasHw && (
+                <View
+                  style={[styles.hwDot, isActive && styles.hwDotActive]}
+                  testID={`hw-dot-${day.key}`}
+                />
+              )}
             </TouchableOpacity>
           );
         })}
@@ -98,7 +111,8 @@ export function ScheduleScreen({
       {/* Список занятий */}
       <View style={styles.pairsSection}>
         <Text style={styles.sectionHeading}>
-          {DAYS.find((d) => d.key === selectedDay)?.label}, {DAYS.find((d) => d.key === selectedDay)?.date} октября · {pairs.length} пары
+          {DAYS.find((d) => d.key === selectedDay)?.label},{" "}
+          {DAYS.find((d) => d.key === selectedDay)?.date} октября · {pairs.length} пары
         </Text>
 
         {pairs.length === 0 ? (
@@ -134,11 +148,20 @@ export function ScheduleScreen({
                   <Text style={styles.metaText}>👤 {pair.teacher}</Text>
                 </View>
 
-                <View style={styles.homeworkInline}>
-                  <Text style={styles.homeworkInlineText}>
-                    📝 Домашнее задание пока не добавлено
-                  </Text>
-                </View>
+                {/* Бейдж привязанного ДЗ */}
+                {pair.homework ? (
+                  <View style={styles.homeworkBadge} testID="pair-homework-badge">
+                    <Text style={styles.homeworkBadgeText}>
+                      📝 ДЗ: {pair.homework}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.homeworkInline}>
+                    <Text style={styles.homeworkInlineText}>
+                      📝 Домашнее задание пока не добавлено
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           ))
@@ -153,7 +176,7 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 54,
     backgroundColor: theme.colors.background,
-    flexGrow: 1,
+    paddingBottom: 24,
   },
   header: {
     marginBottom: 16,
@@ -172,7 +195,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: theme.colors.muted,
     marginTop: 2,
   },
@@ -181,15 +204,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radii.md,
     padding: 3,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: theme.colors.borderSoft,
-    marginBottom: 14,
   },
   segmentBtn: {
     flex: 1,
     paddingVertical: 8,
-    borderRadius: theme.radii.sm,
     alignItems: "center",
+    borderRadius: theme.radii.sm,
   },
   segmentBtnActive: {
     backgroundColor: theme.colors.surface,
@@ -201,27 +224,28 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "600",
     color: theme.colors.muted,
   },
   segmentTextActive: {
-    color: theme.colors.foreground,
-    fontWeight: "600",
+    color: theme.colors.primary,
   },
   weekStrip: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 18,
+    marginBottom: 20,
+    gap: 6,
   },
   weekDayBtn: {
     flex: 1,
-    marginHorizontal: 2,
+    alignItems: "center",
     paddingVertical: 8,
     borderRadius: theme.radii.md,
     backgroundColor: theme.colors.surface,
-    alignItems: "center",
     borderWidth: 1,
-    borderColor: theme.colors.borderSoft,
+    borderColor: theme.colors.border,
+    minHeight: 56,
+    justifyContent: "center",
   },
   weekDayBtnActive: {
     backgroundColor: theme.colors.primary,
@@ -236,7 +260,7 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   weekDayDate: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: theme.colors.foreground,
     marginTop: 2,
@@ -244,35 +268,52 @@ const styles = StyleSheet.create({
   weekDayDateActive: {
     color: "#ffffff",
   },
+  hwDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: theme.colors.primary,
+    marginTop: 3,
+  },
+  hwDotActive: {
+    backgroundColor: "#ffffff",
+  },
   pairsSection: {
-    marginTop: 2,
+    marginBottom: 16,
   },
   sectionHeading: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "700",
     color: theme.colors.mutedStrong,
-    marginBottom: 12,
+    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   lessonCard: {
     flexDirection: "row",
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.md,
-    marginBottom: 12,
+    borderRadius: theme.radii.lg,
+    padding: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   timeColumn: {
-    width: 70,
-    backgroundColor: theme.colors.surfaceMuted,
+    width: 54,
+    marginRight: 10,
+    justifyContent: "center",
+    alignItems: "center",
     borderRightWidth: 1,
     borderRightColor: theme.colors.borderSoft,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
+    paddingRight: 6,
   },
   timeStart: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: theme.colors.foreground,
   },
@@ -283,20 +324,19 @@ const styles = StyleSheet.create({
   },
   lessonMain: {
     flex: 1,
-    padding: 12,
+    justifyContent: "center",
   },
   lessonHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 6,
+    gap: 6,
   },
   subjectText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "700",
     color: theme.colors.foreground,
-    marginRight: 6,
+    flex: 1,
   },
   subgroupPill: {
     backgroundColor: theme.colors.primarySoft,
@@ -330,6 +370,19 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 12,
     color: theme.colors.muted,
+  },
+  homeworkBadge: {
+    backgroundColor: theme.colors.primarySoft,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: theme.radii.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSoft,
+  },
+  homeworkBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: theme.colors.primary,
   },
   homeworkInline: {
     backgroundColor: theme.colors.surfaceMuted,

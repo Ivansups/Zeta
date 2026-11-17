@@ -1,10 +1,9 @@
-import { DayOfWeek, SchedulePair, Subgroup, User } from "../types";
-import { MOCK_SCHEDULE, MOCK_USERS } from "./mockData";
+import { DayOfWeek, HomeworkItem, SchedulePair, Subgroup, User } from "../types";
+import { MOCK_HOMEWORKS, MOCK_SCHEDULE, MOCK_USERS } from "./mockData";
 import { tokenStorage } from "./storage";
 
 export const api = {
   async loginWithTelegram(telegramIdOrKey: string): Promise<User> {
-    // В dev/mock режиме сопоставляем по ключу или telegramId
     const user =
       MOCK_USERS[telegramIdOrKey] ||
       Object.values(MOCK_USERS).find((u) => u.telegramId === telegramIdOrKey) ||
@@ -32,8 +31,22 @@ export const api = {
       if (pair.day !== day) {
         return false;
       }
-      // Пара либо общая (нет subgroup), либо совпадает с выбранной подгруппой
       return pair.subgroup === undefined || pair.subgroup === subgroup;
     });
+  },
+
+  async getHomeworks(subgroup?: Subgroup): Promise<HomeworkItem[]> {
+    return MOCK_HOMEWORKS.filter((hw) => {
+      if (subgroup === undefined) {
+        return true;
+      }
+      return hw.subgroup === undefined || hw.subgroup === subgroup;
+    });
+  },
+
+  async getDaysWithHomework(subgroup?: Subgroup): Promise<DayOfWeek[]> {
+    const list = await this.getHomeworks(subgroup);
+    const daySet = new Set<DayOfWeek>(list.map((item) => item.day));
+    return Array.from(daySet);
   },
 };
