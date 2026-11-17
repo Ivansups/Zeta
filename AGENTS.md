@@ -10,6 +10,7 @@
 | `telegram-bot/` | Python 3.13, long polling | `uv` | то же |
 | `frontend/` | Next.js (App Router), Tailwind, Jest + RTL | `pnpm` | `pnpm lint && pnpm typecheck && pnpm test` |
 | `mobile/` | React Native (Expo), Jest + RNTL | `pnpm` | `pnpm lint && pnpm typecheck && pnpm test` |
+| `packages/theme/` | TypeScript-токены, генератор CSS | `node`, без зависимостей | `node scripts/generate.ts --check` |
 
 Корневого workspace нет: каждый пакет самостоятельный, со своим lockfile. Команды выполняются из папки пакета.
 
@@ -61,5 +62,7 @@
 ## Особенности пакетов
 
 - **Next.js** меняется между версиями: перед работой с API фреймворка читай актуальную документацию в `frontend/node_modules/next/dist/docs/`, а не полагайся на память.
+- **Тема.** Источник правды — `packages/theme/src/tokens.ts`. Файлы `frontend/src/app/theme.generated.css`
+  и `frontend/src/theme/tokens.generated.ts` генерируются (`pnpm theme:css` из `frontend/`) и руками не правятся.
 - **Expo** тоже: смотри мажорную версию `expo` в `mobile/package.json` и документацию `https://docs.expo.dev/versions/v<major>.0.0/` (индекс: `https://docs.expo.dev/llms.txt`). Папки `ios/` и `android/` не создаём и не правим вручную — нативные настройки только через `app.json` и config plugins. После добавления библиотеки с нативным кодом нужен development build.
 - `next dev` пересоздаёт `frontend/AGENTS.md` и `frontend/CLAUDE.md`; они в `.gitignore`, не коммитим.
