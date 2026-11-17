@@ -5,3 +5,4 @@ here when a module gets its first model.
 """
 
 from backend.auth import models as auth_models  # noqa: F401
+from backend.schedule import db_models as schedule_models  # noqa: F401
