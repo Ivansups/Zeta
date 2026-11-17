@@ -3,7 +3,6 @@
 import enum
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -18,9 +17,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
-
-if TYPE_CHECKING:
-    from backend.auth.models import Group
 
 
 def utc_now() -> datetime:
@@ -55,8 +51,11 @@ class SchedulePair(Base):
         index=True,
         nullable=False,
     )
+    # subgroup: 1, 2, or None (applies to whole group)
     subgroup: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    day_of_week: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    day_of_week: Mapped[str] = mapped_column(
+        String(32), nullable=False, index=True
+    )  # e.g. "Понедельник" or "monday"
     pair_number: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     start_time: Mapped[str] = mapped_column(String(8), nullable=False)
     end_time: Mapped[str] = mapped_column(String(8), nullable=False)
@@ -82,16 +81,17 @@ class SchedulePair(Base):
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
     )
 
-    group: Mapped["Group"] = relationship("Group", backref="schedule_pairs")
+    group: Mapped["backend.auth.models.Group"] = relationship(  # type: ignore[name-defined] # noqa: F821
+        "Group", backref="schedule_pairs"
+    )
 
     __table_args__ = (
         UniqueConstraint(
             "group_id",
+            "subgroup",
             "day_of_week",
             "pair_number",
             "week_parity",
-            "subgroup",
-            "subject",
             name="uq_schedule_pair_slot",
         ),
     )
