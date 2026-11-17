@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "theme:css": "node ../packages/theme/scripts/generate.ts",
+    "theme:check": "node ../packages/theme/scripts/generate.ts --check"
   },
   "dependencies": {
     "lucide-react": "^1.56.0",

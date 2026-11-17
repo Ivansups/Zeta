@@ -1,4 +1,9 @@
-export interface ThemeColors {
+/**
+ * Канонические дизайн-токены Zeta: цвета — hex, размеры — числа без единиц,
+ * чтобы одни значения подходили и для CSS, и для React Native.
+ */
+
+export interface ThemePalette {
   readonly background: string;
   readonly surface: string;
   readonly surfaceMuted: string;
@@ -43,41 +48,26 @@ export interface ThemeColors {
   readonly dangerBorder: string;
 }
 
-export interface ThemeTokens {
-  readonly light: ThemeColors;
-  readonly dark: ThemeColors;
-  readonly radii: {
-    readonly xs: string;
-    readonly sm: string;
-    readonly md: string;
-    readonly lg: string;
-    readonly xl: string;
-    readonly full: string;
-  };
-  readonly spacing: {
-    readonly xs: string;
-    readonly sm: string;
-    readonly md: string;
-    readonly lg: string;
-    readonly xl: string;
-    readonly "2xl": string;
-  };
-  readonly shadows: {
-    readonly xs: string;
-    readonly sm: string;
-    readonly md: string;
-    readonly lg: string;
-  };
-  readonly transitions: {
-    readonly easeSpring: string;
-    readonly easeBounce: string;
-    readonly durationFast: string;
-    readonly durationNormal: string;
-    readonly durationEnter: string;
-  };
+/** RN берёт числа напрямую, веб получает CSS-строку через css.ts. */
+export interface ShadowLayer {
+  readonly x: number;
+  readonly y: number;
+  readonly blur: number;
+  readonly spread?: number;
+  /** RGB-канал без альфы, например [15, 17, 21]. */
+  readonly rgb: readonly [number, number, number];
+  /** Альфа в процентах, как в CSS: 4 → 4%. */
+  readonly opacity: number;
 }
 
-export const lightColors: ThemeColors = {
+export interface ShadowScale {
+  readonly xs: readonly ShadowLayer[];
+  readonly sm: readonly ShadowLayer[];
+  readonly md: readonly ShadowLayer[];
+  readonly lg: readonly ShadowLayer[];
+}
+
+export const lightPalette: ThemePalette = {
   background: "#f8f9fa",
   surface: "#ffffff",
   surfaceMuted: "#f1f3f5",
@@ -120,9 +110,9 @@ export const lightColors: ThemeColors = {
   danger: "#b91c1c",
   dangerSoft: "#fef2f2",
   dangerBorder: "#fecaca",
-} as const;
+};
 
-export const darkColors: ThemeColors = {
+export const darkPalette: ThemePalette = {
   background: "#0c0d10",
   surface: "#13151a",
   surfaceMuted: "#1a1d24",
@@ -165,48 +155,62 @@ export const darkColors: ThemeColors = {
   danger: "#f87171",
   dangerSoft: "#2e1416",
   dangerBorder: "#521c20",
+};
+
+export const lightShadows: ShadowScale = {
+  xs: [{ x: 0, y: 1, blur: 2, rgb: [15, 17, 21], opacity: 4 }],
+  sm: [
+    { x: 0, y: 2, blur: 4, rgb: [15, 17, 21], opacity: 5 },
+    { x: 0, y: 6, blur: 16, rgb: [15, 17, 21], opacity: 4 },
+  ],
+  md: [
+    { x: 0, y: 6, blur: 12, spread: -2, rgb: [15, 17, 21], opacity: 8 },
+    { x: 0, y: 16, blur: 32, spread: -4, rgb: [15, 17, 21], opacity: 8 },
+  ],
+  lg: [{ x: 0, y: 20, blur: 48, spread: -12, rgb: [15, 17, 21], opacity: 14 }],
+};
+
+export const darkShadows: ShadowScale = {
+  xs: [{ x: 0, y: 1, blur: 2, rgb: [0, 0, 0], opacity: 20 }],
+  sm: [
+    { x: 0, y: 2, blur: 6, rgb: [0, 0, 0], opacity: 30 },
+    { x: 0, y: 8, blur: 24, rgb: [0, 0, 0], opacity: 25 },
+  ],
+  md: [
+    { x: 0, y: 6, blur: 14, rgb: [0, 0, 0], opacity: 35 },
+    { x: 0, y: 20, blur: 36, rgb: [0, 0, 0], opacity: 30 },
+  ],
+  lg: [{ x: 0, y: 24, blur: 56, rgb: [0, 0, 0], opacity: 50 }],
+};
+
+/** Числа: RN принимает их напрямую, CSS — через `radiusPx`. */
+export const radius = {
+  xs: 4,
+  sm: 6,
+  md: 8,
+  lg: 12,
+  xl: 16,
+  full: 9999,
 } as const;
 
-export const radii = {
-  xs: "4px",
-  sm: "6px",
-  md: "8px",
-  lg: "12px",
-  xl: "16px",
-  full: "9999px",
+export const space = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  "2xl": 32,
 } as const;
 
-export const spacing = {
-  xs: "4px",
-  sm: "8px",
-  md: "12px",
-  lg: "16px",
-  xl: "24px",
-  "2xl": "32px",
+/** Длительности в мс, кривые — контрольные точки Безье. */
+export const motion = {
+  duration: {
+    fast: 140,
+    normal: 200,
+    enter: 260,
+  },
+  easing: {
+    spring: [0.16, 1, 0.3, 1],
+    bounce: [0.34, 1.4, 0.64, 1],
+  },
 } as const;
-
-export const shadows = {
-  xs: "0 1px 2px rgb(15 17 21 / 4%)",
-  sm: "0 2px 4px rgb(15 17 21 / 5%), 0 6px 16px rgb(15 17 21 / 4%)",
-  md: "0 6px 12px -2px rgb(15 17 21 / 8%), 0 16px 32px -4px rgb(15 17 21 / 8%)",
-  lg: "0 20px 48px -12px rgb(15 17 21 / 14%)",
-} as const;
-
-export const transitions = {
-  easeSpring: "cubic-bezier(0.16, 1, 0.3, 1)",
-  easeBounce: "cubic-bezier(0.34, 1.4, 0.64, 1)",
-  durationFast: "140ms",
-  durationNormal: "200ms",
-  durationEnter: "260ms",
-} as const;
-
-export const zetaTheme: ThemeTokens = {
-  light: lightColors,
-  dark: darkColors,
-  radii,
-  spacing,
-  shadows,
-  transitions,
-} as const;
-
-export default zetaTheme;

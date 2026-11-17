@@ -1,2 +1,1 @@
-export * from "./tokens";
-export { default } from "./tokens";
+export * from "./tokens.generated";
