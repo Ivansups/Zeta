@@ -1,6 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
+import { api } from "@/lib/api";
+import { addDays, currentDayName, formatDayCaption } from "@/lib/week";
+
 import { TelegramMiniApp } from "./telegram-mini-app";
+import { apiPair } from "@/lib/test-fixtures";
+
+jest.mock("@/lib/api", () => ({
+  api: {
+    getWeekSchedule: jest.fn(),
+    getHomeworks: jest.fn(),
+  },
+}));
+
+const mockedApi = api as jest.Mocked<typeof api>;
 
 type MockTelegramWebApp = {
   initData: string;
@@ -25,7 +38,7 @@ function installTelegramWebApp(
   return webApp;
 }
 
-function mockFetchSuccess(): jest.Mock {
+function mockAuthFetch(): jest.Mock {
   const fetchMock = jest.fn().mockResolvedValue({
     ok: true,
     json: async () => AUTH_RESPONSE,
@@ -34,13 +47,35 @@ function mockFetchSuccess(): jest.Mock {
   return fetchMock;
 }
 
+function dayLabel(offset: number): string {
+  const date = addDays(new Date(), offset);
+  return formatDayCaption(date);
+}
+
 describe("TelegramMiniApp", () => {
   const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    mockedApi.getHomeworks.mockResolvedValue([]);
+    mockedApi.getWeekSchedule.mockResolvedValue([
+      apiPair({
+        id: "pair-math",
+        day_of_week: currentDayName(new Date()),
+        subject: "Математический анализ",
+      }),
+      apiPair({
+        id: "pair-discrete",
+        day_of_week: currentDayName(addDays(new Date(), 1)),
+        subject: "Дискретная математика",
+        pair_number: 2,
+      }),
+    ]);
+  });
 
   afterEach(() => {
     delete window.Telegram;
     global.fetch = originalFetch;
-    jest.restoreAllMocks();
+    jest.clearAllMocks();
   });
 
   it("guides the user to open the app inside Telegram", async () => {
@@ -56,7 +91,7 @@ describe("TelegramMiniApp", () => {
 
   it("authenticates automatically with Telegram initData", async () => {
     const webApp = installTelegramWebApp();
-    const fetchMock = mockFetchSuccess();
+    const fetchMock = mockAuthFetch();
 
     render(<TelegramMiniApp />);
 
@@ -78,13 +113,15 @@ describe("TelegramMiniApp", () => {
 
   it("switches days with the quick day buttons", async () => {
     installTelegramWebApp();
-    mockFetchSuccess();
+    mockAuthFetch();
 
     render(<TelegramMiniApp />);
 
     expect(await screen.findByText("Иван Тестов")).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Пятница, 16 октября" }),
+      screen.getByRole("button", {
+        name: `${currentDayName(addDays(new Date(), 1))}, ${dayLabel(1)}`,
+      }),
     );
 
     expect(screen.getByText("Дискретная математика")).toBeInTheDocument();
@@ -93,7 +130,7 @@ describe("TelegramMiniApp", () => {
 
   it("switches days with horizontal swipes", async () => {
     installTelegramWebApp();
-    mockFetchSuccess();
+    mockAuthFetch();
 
     render(<TelegramMiniApp />);
 

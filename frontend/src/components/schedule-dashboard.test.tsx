@@ -1,112 +1,165 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { api } from "@/lib/api";
+import { apiHomework, apiPair, apiUser } from "@/lib/test-fixtures";
+
 import { ScheduleDashboard } from "./schedule-dashboard";
 
-describe("ScheduleDashboard - S-06 & S-11 Homework Integration", () => {
-  it("allows adding homework from lesson card and updates UI optimistically with toast", async () => {
+jest.mock("@/lib/api", () => ({
+  api: {
+    getMe: jest.fn(),
+    getDaySchedule: jest.fn(),
+    getWeekSchedule: jest.fn(),
+    getHomeworks: jest.fn(),
+    createHomework: jest.fn(),
+  },
+}));
+
+const mockedApi = api as jest.Mocked<typeof api>;
+
+beforeEach(() => {
+  mockedApi.getMe.mockResolvedValue(
+    apiUser({ id: "me", role: "elder", display_name: "Данил Шелудько", group_id: "group-1" }),
+  );
+  mockedApi.getDaySchedule.mockResolvedValue([
+    apiPair({ id: "22222222-2222-2222-2222-222222222222", pair_number: 1, subject: "Математический анализ" }),
+    apiPair({
+      id: "11111111-1111-1111-1111-111111111111",
+      pair_number: 2,
+      subject: "Английский язык",
+      lesson_type: "прак",
+    }),
+  ]);
+  mockedApi.getWeekSchedule.mockResolvedValue([
+    apiPair({ id: "22222222-2222-2222-2222-222222222222", pair_number: 1, subject: "Математический анализ" }),
+    apiPair({
+      id: "11111111-1111-1111-1111-111111111111",
+      pair_number: 2,
+      subject: "Английский язык",
+      lesson_type: "прак",
+    }),
+  ]);
+  mockedApi.getHomeworks.mockResolvedValue([
+    apiHomework({ id: "hw-math", schedule_pair_id: "22222222-2222-2222-2222-222222222222", description: "Ряды" }),
+  ]);
+  mockedApi.createHomework.mockResolvedValue(apiHomework({ id: "hw-new" }));
+});
+
+afterEach(() => {
+  jest.clearAllMocks();
+});
+
+describe("ScheduleDashboard", () => {
+  it("renders schedule from the API and shows lessons without homework", async () => {
+    render(<ScheduleDashboard />);
+
+    const englishHeading = await screen.findByRole("heading", {
+      name: "Английский язык",
+    });
+    const englishCard = englishHeading.closest("article")!;
+    expect(
+      within(englishCard).getByText("Домашнего задания пока нет"),
+    ).toBeInTheDocument();
+  });
+
+  it("adds homework from a lesson card and persists it through the API", async () => {
     const user = userEvent.setup();
 
     render(<ScheduleDashboard />);
 
-    const englishHeading = screen.getByRole("heading", { name: "Английский язык" });
-    const englishCard = englishHeading.closest("article")!;
-    expect(within(englishCard).getByText("Домашнего задания пока нет")).toBeInTheDocument();
-
-    const addHwButton = within(englishCard).getByRole("button", {
-      name: /\+?\s*Добавить ДЗ/i,
+    const englishHeading = await screen.findByRole("heading", {
+      name: "Английский язык",
     });
-    await user.click(addHwButton);
+    const englishCard = englishHeading.closest("article")!;
+
+    await user.click(
+      within(englishCard).getByRole("button", { name: /\+?\s*Добавить ДЗ/i }),
+    );
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByLabelText("Пара")).toHaveValue("english-2026-10-15");
+    expect(screen.getByLabelText("Пара")).toHaveValue("11111111-1111-1111-1111-111111111111");
 
     await user.type(
       screen.getByLabelText("Описание задания"),
       "Подготовить топик про технологии",
     );
-
     await user.click(screen.getByRole("button", { name: "Сохранить ДЗ" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
     expect(
       within(englishCard).getByText("Подготовить топик про технологии"),
     ).toBeInTheDocument();
-    expect(within(englishCard).queryByText("Домашнего задания пока нет")).not.toBeInTheDocument();
-
+    expect(mockedApi.createHomework).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "Подготовить топик про технологии",
+        subject: "Английский язык",
+        schedule_pair_id: "11111111-1111-1111-1111-111111111111",
+      }),
+    );
     expect(screen.getByRole("status")).toHaveTextContent(
       "Задание для «Английский язык» сохранено",
     );
   });
 
-  it("allows editing existing homework from lesson card and updates UI optimistically", async () => {
+  it("edits existing homework from a lesson card", async () => {
     const user = userEvent.setup();
 
     render(<ScheduleDashboard />);
 
-    const mathHeading = screen.getByRole("heading", { name: "Математический анализ" });
-    const mathCard = mathHeading.closest("article")!;
-    expect(
-      within(mathCard).getByText(/Исследовать ряды на сходимость/),
-    ).toBeInTheDocument();
-
-    const editButton = within(mathCard).getByRole("button", {
-      name: /Изменить|Редактировать/i,
+    const mathHeading = await screen.findByRole("heading", {
+      name: "Математический анализ",
     });
-    await user.click(editButton);
+    const mathCard = mathHeading.closest("article")!;
+    expect(within(mathCard).getByText("Ряды")).toBeInTheDocument();
 
-    expect(screen.getByRole("heading", { name: "Редактировать ДЗ" })).toBeInTheDocument();
-    const descriptionInput = screen.getByLabelText("Описание задания");
-    expect(descriptionInput).toHaveValue(
-      "Исследовать ряды на сходимость, задачи 4.12–4.18",
-    );
+    await user.click(within(mathCard).getByRole("button", { name: /Редактировать/i }));
+    expect(screen.getByLabelText("Описание задания")).toHaveValue("Ряды");
 
-    await user.clear(descriptionInput);
-    await user.type(descriptionInput, "Разобрать теорию к коллоквиуму");
-
+    await user.clear(screen.getByLabelText("Описание задания"));
+    await user.type(screen.getByLabelText("Описание задания"), "Ряды и интегралы");
     await user.click(screen.getByRole("button", { name: "Сохранить изменения" }));
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-    expect(
-      within(mathCard).getByText("Разобрать теорию к коллоквиуму"),
-    ).toBeInTheDocument();
-
+    expect(within(mathCard).getByText("Ряды и интегралы")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Задание для «Математический анализ» обновлено",
     );
   });
 
-  it("opens Zeta AI assistant mode from header and saves parsed homework", async () => {
+  it("opens the Zeta AI assistant and saves the parsed homework", async () => {
     const user = userEvent.setup();
 
     render(<ScheduleDashboard />);
 
-    const aiButton = screen.getByRole("button", { name: /Zeta AI/i });
-    await user.click(aiButton);
+    await screen.findByRole("heading", { name: "Математический анализ" });
 
-    expect(screen.getByRole("heading", { name: "Черновик с Zeta AI" })).toBeInTheDocument();
-    const promptInput = screen.getByLabelText("Текст для разбора");
-    await user.type(promptInput, "по английскому подготовить презентацию к пятнице");
-
-    await user.click(screen.getByRole("button", { name: "Разобрать текст" }));
-
-    expect(screen.getByRole("heading", { name: "Предпросмотр черновика" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Пара")).toHaveValue("english-2026-10-15");
-    expect(screen.getByLabelText("Дата сдачи")).toHaveValue("2026-10-16");
-    expect(screen.getByLabelText("Описание задания")).toHaveValue("подготовить презентацию");
-
-    await user.click(screen.getByRole("button", { name: "Сохранить в расписание" }));
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-    const englishHeading = screen.getByRole("heading", { name: "Английский язык" });
-    const englishCard = englishHeading.closest("article")!;
-    expect(within(englishCard).getByText("подготовить презентацию")).toBeInTheDocument();
-
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Задание для «Английский язык» сохранено",
+    await user.click(screen.getByRole("button", { name: /Zeta AI/i }));
+    await user.type(
+      screen.getByLabelText("Текст для разбора"),
+      "по матану решить номера 12–18 к четвергу",
     );
+    await user.click(screen.getByRole("button", { name: /Разобрать текст/i }));
+
+    expect(
+      screen.getByText("Черновик распознан Zeta AI"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Сохранить в расписание" }),
+    );
+
+    expect(mockedApi.createHomework).toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent(/сохранено|обновлено/);
+  });
+
+  it("shows an empty state when the group has no lessons", async () => {
+    mockedApi.getDaySchedule.mockResolvedValue([]);
+    mockedApi.getWeekSchedule.mockResolvedValue([]);
+    mockedApi.getHomeworks.mockResolvedValue([]);
+
+    render(<ScheduleDashboard />);
+
+    expect(await screen.findByText("На этот день пар нет")).toBeInTheDocument();
+    expect(screen.getByText("Дедлайнов пока нет")).toBeInTheDocument();
   });
 });

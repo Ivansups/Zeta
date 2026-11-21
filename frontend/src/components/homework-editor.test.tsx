@@ -2,13 +2,14 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { HomeworkEditor } from "./homework-editor";
+import { testLessons } from "@/lib/test-fixtures";
 
 describe("HomeworkEditor", () => {
   it("validates required description and does not submit empty or whitespace text", async () => {
     const user = userEvent.setup();
     const onSave = jest.fn();
 
-    render(<HomeworkEditor open onClose={jest.fn()} onSave={onSave} />);
+    render(<HomeworkEditor open lessons={testLessons} onClose={jest.fn()} onSave={onSave} />);
 
     await user.click(screen.getByRole("button", { name: "Сохранить ДЗ" }));
     expect(screen.getByText("Добавьте описание задания")).toBeInTheDocument();
@@ -24,7 +25,7 @@ describe("HomeworkEditor", () => {
     const user = userEvent.setup();
     const onSave = jest.fn();
 
-    render(<HomeworkEditor open onClose={jest.fn()} onSave={onSave} />);
+    render(<HomeworkEditor open lessons={testLessons} onClose={jest.fn()} onSave={onSave} />);
 
     await user.type(
       screen.getByLabelText("Описание задания"),
@@ -42,7 +43,7 @@ describe("HomeworkEditor", () => {
     const user = userEvent.setup();
     const onSave = jest.fn();
 
-    render(<HomeworkEditor open onClose={jest.fn()} onSave={onSave} />);
+    render(<HomeworkEditor open lessons={testLessons} onClose={jest.fn()} onSave={onSave} />);
 
     await user.selectOptions(screen.getByLabelText("Пара"), "python-2026-10-15");
     await user.selectOptions(screen.getByLabelText("Подгруппа"), "1");
@@ -81,6 +82,7 @@ describe("HomeworkEditor", () => {
     render(
       <HomeworkEditor
         open
+        lessons={testLessons}
         initialData={initialData}
         onClose={jest.fn()}
         onSave={onSave}
@@ -116,6 +118,7 @@ describe("HomeworkEditor", () => {
     render(
       <HomeworkEditor
         open
+        lessons={testLessons}
         initialMode="assistant"
         onClose={jest.fn()}
         onSave={onSave}
@@ -134,6 +137,7 @@ describe("HomeworkEditor", () => {
     render(
       <HomeworkEditor
         open
+        lessons={testLessons}
         initialMode="assistant"
         onClose={jest.fn()}
         onSave={onSave}
@@ -159,6 +163,7 @@ describe("HomeworkEditor", () => {
     render(
       <HomeworkEditor
         open
+        lessons={testLessons}
         initialMode="assistant"
         onClose={jest.fn()}
         onSave={onSave}
@@ -193,7 +198,9 @@ describe("HomeworkEditor", () => {
     const user = userEvent.setup();
     const onClose = jest.fn();
 
-    render(<HomeworkEditor open onClose={onClose} onSave={jest.fn()} />);
+    render(
+      <HomeworkEditor open lessons={testLessons} onClose={onClose} onSave={jest.fn()} />,
+    );
 
     await user.click(screen.getByRole("button", { name: "Отмена" }));
     expect(onClose).toHaveBeenCalled();
