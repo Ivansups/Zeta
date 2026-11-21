@@ -15,6 +15,7 @@ from telegram_bot.client import BackendAPIError, BackendClient, BackendClientErr
 from telegram_bot.config import Settings
 from telegram_bot.formatters import format_confirmation, format_draft_card
 from telegram_bot.keyboards.homework import build_draft_keyboard
+from telegram_bot.messages import CLOSED_BETA_MESSAGE
 from telegram_bot.states import HomeworkDraftStates
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,9 @@ async def _ensure_can_manage(message: Message, backend: BackendClient) -> bool:
     try:
         bot_user = await backend.get_telegram_user(user.id)
     except BackendAPIError as err:
-        if err.status_code == 404:
+        if err.status_code == 403:
+            await message.answer(CLOSED_BETA_MESSAGE)
+        elif err.status_code == 404:
             await message.answer(
                 "Ты не привязан к группе. Сначала войди в Zeta через веб-версию."
             )

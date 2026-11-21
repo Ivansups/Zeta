@@ -351,3 +351,21 @@ async def test_draft_callback_backend_error_is_reported(
 
     assert state.state is None
     assert "получилось" in message.edit_text.call_args.args[0]
+
+
+async def test_homework_text_handler_reports_closed_beta(
+    message: MagicMock,
+    backend: MagicMock,
+    settings: Settings,
+    bot: MagicMock,
+) -> None:
+    backend.get_telegram_user.side_effect = BackendAPIError(403, "closed beta")
+    state = FakeState()
+
+    await homework_text_handler(
+        message, cast(FSMContext, state), cast(BackendClient, backend), settings, bot
+    )
+
+    backend.parse_homework_draft.assert_not_awaited()
+    text = message.answer.call_args.args[0]
+    assert "закрыт" in text.lower()

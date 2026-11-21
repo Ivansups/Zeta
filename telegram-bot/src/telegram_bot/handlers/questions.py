@@ -8,6 +8,7 @@ from aiogram.types import Message
 
 from telegram_bot.client import BackendAPIError, BackendClient, BackendClientError
 from telegram_bot.formatters import format_ask_response
+from telegram_bot.messages import CLOSED_BETA_MESSAGE
 from telegram_bot.throttle import QuestionThrottle
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,9 @@ async def question_handler(
         response = await backend_client.ask_question(user.id, text)
     except BackendAPIError as err:
         logger.warning("Failed to answer question: %s", err)
-        if err.status_code in {403, 404, 409}:
+        if err.status_code == 403:
+            await message.answer(CLOSED_BETA_MESSAGE)
+        elif err.status_code in {404, 409}:
             await message.answer(
                 "Твоя группа не найдена. Войди в Zeta через веб-версию, "
                 "чтобы привязать аккаунт."
