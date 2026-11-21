@@ -51,17 +51,22 @@ from backend.db.session import get_session
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _is_cookie_secure(settings: Settings) -> bool:
+    return settings.environment.strip().lower() == "production"
+
+
 def _set_auth_cookies(
     response: Response,
     access_token: str,
     refresh_token: str,
     refresh_days: int = 30,
+    secure: bool = False,
 ) -> None:
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="lax",
         max_age=15 * 60,
         path="/",
@@ -70,16 +75,20 @@ def _set_auth_cookies(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="lax",
         max_age=refresh_days * 86400,
         path="/",
     )
 
 
-def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie(key="access_token", path="/")
-    response.delete_cookie(key="refresh_token", path="/")
+def _clear_auth_cookies(response: Response, secure: bool = False) -> None:
+    response.delete_cookie(
+        key="access_token", path="/", httponly=True, secure=secure, samesite="lax"
+    )
+    response.delete_cookie(
+        key="refresh_token", path="/", httponly=True, secure=secure, samesite="lax"
+    )
 
 
 @router.post("/telegram/widget", response_model=TokenResponse)
@@ -138,6 +147,7 @@ async def login_telegram_widget(
         access_token=access_token,
         refresh_token=raw_refresh,
         refresh_days=settings.refresh_token_expire_days,
+        secure=_is_cookie_secure(settings),
     )
 
     return TokenResponse(
@@ -201,6 +211,7 @@ async def login_telegram_webapp(
         access_token=access_token,
         refresh_token=raw_refresh,
         refresh_days=settings.refresh_token_expire_days,
+        secure=_is_cookie_secure(settings),
     )
 
     return TokenResponse(
@@ -235,6 +246,7 @@ async def login_dev(
         access_token=access_token,
         refresh_token=raw_refresh,
         refresh_days=settings.refresh_token_expire_days,
+        secure=_is_cookie_secure(settings),
     )
     return TokenResponse(
         access_token=access_token,
@@ -268,7 +280,7 @@ async def refresh_tokens(
             ip_address=ip_address,
         )
     except PermissionError as err:
-        _clear_auth_cookies(response)
+        _clear_auth_cookies(response, secure=_is_cookie_secure(settings))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(err),
@@ -279,6 +291,7 @@ async def refresh_tokens(
         access_token=new_access,
         refresh_token=new_refresh,
         refresh_days=settings.refresh_token_expire_days,
+        secure=_is_cookie_secure(settings),
     )
 
     return TokenResponse(
@@ -292,12 +305,13 @@ async def logout(
     response: Response,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[AuthService, Depends(get_auth_service)],
+    settings: Annotated[Settings, Depends(get_settings)],
     refresh_token_cookie: Annotated[str | None, Cookie(alias="refresh_token")] = None,
     x_refresh_token: Annotated[str | None, Header(alias="x-refresh-token")] = None,
 ) -> dict[str, str]:
     raw_refresh = refresh_token_cookie or x_refresh_token
     await service.logout_user(current_user, raw_refresh_token=raw_refresh)
-    _clear_auth_cookies(response)
+    _clear_auth_cookies(response, secure=_is_cookie_secure(settings))
     return {"status": "logged_out"}
 
 

@@ -136,6 +136,7 @@ async def test_get_me_authenticated(
     assert me_resp.json()["telegram_id"] == 3003
 
     # Неавторизованный запрос
+    client.cookies.clear()
     anon_resp = await client.get("/auth/me")
     assert anon_resp.status_code == 401
 
