@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.models import (
@@ -116,6 +116,20 @@ class AuthService:
         result = await self.session.execute(stmt)
         invite = result.scalar_one_or_none()
 
+        if not invite:
+            # Fallback to check by UUID id for existing active invites
+            try:
+                invite_uuid = uuid.UUID(raw_invite_token)
+                stmt_uuid = (
+                    select(InviteToken)
+                    .where(InviteToken.id == invite_uuid)
+                    .with_for_update()
+                )
+                res_uuid = await self.session.execute(stmt_uuid)
+                invite = res_uuid.scalar_one_or_none()
+            except ValueError:
+                pass
+
         if not invite or invite.is_revoked:
             raise ValueError("Invite link is invalid or has been revoked")
 
@@ -141,6 +155,20 @@ class AuthService:
         invite.activations_count += 1
         if invite.is_single_use:
             invite.is_revoked = True
+
+    async def apply_invite_to_user(self, user: User, raw_invite_token: str) -> User:
+        """Apply an invite to an already authenticated user and commit."""
+        await self._apply_invite(user, raw_invite_token)
+        audit = AuditLog(
+            user_id=user.id,
+            event="INVITE_APPLIED",
+            details=(
+                f"Invite applied to user (group_id={user.group_id}, role={user.role})"
+            ),
+        )
+        self.session.add(audit)
+        await self.session.commit()
+        return user
 
     async def rotate_refresh_token(
         self,
@@ -279,6 +307,11 @@ class AuthService:
         university: str | None = None,
     ) -> Group:
         """Self-service creation of a group: creator becomes elder."""
+        if creator.group_id is not None and creator.role != RoleEnum.ADMIN.value:
+            raise ValueError(
+                "Пользователь уже состоит в группе. Сначала покиньте текущую группу."
+            )
+
         stmt = select(Group).where(Group.name == name)
         existing = (await self.session.execute(stmt)).scalar_one_or_none()
         if existing:
@@ -300,6 +333,41 @@ class AuthService:
         self.session.add(audit)
         await self.session.commit()
         return group
+
+    async def leave_group(self, user: User) -> User:
+        """Leave current group.
+
+        If elder, requires transferring role first or being sole member.
+        """
+        if user.group_id is None:
+            raise ValueError("Вы не состоите ни в одной группе.")
+
+        if user.role == RoleEnum.ELDER.value:
+            count_stmt = select(func.count(User.id)).where(
+                User.group_id == user.group_id, User.id != user.id
+            )
+            count_res = await self.session.execute(count_stmt)
+            other_count = count_res.scalar_one()
+            if other_count > 0:
+                raise ValueError(
+                    "Вы староста группы. Перед выходом передайте права "
+                    "старосты другому студенту."
+                )
+
+        old_group_id = user.group_id
+        user.group_id = None
+        user.subgroup_number = None
+        user.role = RoleEnum.STUDENT.value
+        user.token_version += 1
+
+        audit = AuditLog(
+            user_id=user.id,
+            event="GROUP_LEAVE",
+            details=f"User left group {old_group_id}",
+        )
+        self.session.add(audit)
+        await self.session.commit()
+        return user
 
     async def create_invite(
         self,
@@ -348,8 +416,12 @@ class AuthService:
 
     async def set_user_role(self, actor: User, target_id: uuid.UUID, role: str) -> User:
         """Change a group member role; a new elder replaces the previous one."""
-        if role not in (RoleEnum.ELDER.value, RoleEnum.STUDENT.value):
-            msg = "Only elder and student roles can be assigned"
+        if role not in (
+            RoleEnum.ELDER.value,
+            RoleEnum.STUDENT.value,
+            RoleEnum.HELPER.value,
+        ):
+            msg = "Only elder, helper and student roles can be assigned"
             raise ValueError(msg)
 
         stmt = select(User).where(User.id == target_id).with_for_update()
@@ -374,6 +446,7 @@ class AuthService:
                     other.role = RoleEnum.STUDENT.value
 
         target.role = role
+        target.token_version += 1
         self.session.add(
             AuditLog(
                 user_id=actor.id,

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useToast } from "@/components/ui/toast";
 import { api, type ApiInvite, type ApiUser } from "@/lib/api";
 import type { Student, Subgroup } from "@/lib/types";
 
@@ -15,6 +16,13 @@ const COLORS = ["blue", "green", "coral", "violet"] as const;
 
 function toStudent(user: ApiUser, index: number): Student {
   const name = user.display_name || user.username || `ID ${user.telegram_id}`;
+  const roleName: Student["role"] =
+    user.role === "elder"
+      ? "Староста"
+      : user.role === "helper"
+        ? "Помощник"
+        : "Студент";
+
   return {
     id: user.id,
     name,
@@ -25,7 +33,7 @@ function toStudent(user: ApiUser, index: number): Student {
       .map((part) => part[0]?.toUpperCase() ?? "")
       .join(""),
     subgroup: (user.subgroup_number as Subgroup) || 1,
-    role: user.role === "elder" ? "Староста" : "Студент",
+    role: roleName,
     color: COLORS[index % COLORS.length],
   };
 }
@@ -52,6 +60,7 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 export function AdminPanel(): React.JSX.Element {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>("invites");
   const [invitations, setInvitations] = useState<Invitation[]>([
     { subgroup: 1, link: null },
@@ -63,12 +72,22 @@ export function AdminPanel(): React.JSX.Element {
     new Map(),
   );
   const [canManage, setCanManage] = useState(false);
-  const [feedback, setFeedback] = useState<string>("");
+  const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
 
   useEffect(() => {
     async function loadData(): Promise<void> {
       const user = await api.getMe();
-      if (user?.role !== "elder" && user?.role !== "admin") {
+      if (!user) return;
+      setCurrentUser(user);
+
+      if (!user.group_id) {
+        setActiveTab("create_group");
+        return;
+      }
+
+      setActiveTab("invites");
+
+      if (user.role !== "elder" && user.role !== "admin") {
         return;
       }
       setCanManage(true);
@@ -103,6 +122,8 @@ export function AdminPanel(): React.JSX.Element {
     void loadData();
   }, []);
 
+  const showCreateGroupTab = !currentUser?.group_id || currentUser?.role === "admin";
+
   async function createInvitation(subgroup: Subgroup): Promise<void> {
     try {
       const invite = await api.createStudentInvite(subgroup);
@@ -112,24 +133,24 @@ export function AdminPanel(): React.JSX.Element {
         ),
       );
       setInviteIds((current) => new Map(current).set(subgroup, invite.id));
-      setFeedback(`Ссылка для подгруппы ${subgroup} создана`);
+      showToast(`Ссылка для подгруппы ${subgroup} создана`);
     } catch {
-      setFeedback("Не удалось создать ссылку. Попробуй позже.");
+      showToast("Не удалось создать ссылку. Попробуй позже.");
     }
   }
 
   async function copyInvitation(subgroup: Subgroup, link: string): Promise<void> {
     if (await copyText(link)) {
-      setFeedback(`Ссылка скопирована для подгруппы ${subgroup}`);
+      showToast(`Ссылка скопирована для подгруппы ${subgroup}`);
     } else {
-      setFeedback("Не удалось скопировать ссылку");
+      showToast("Не удалось скопировать ссылку");
     }
   }
 
   async function revokeInvitation(subgroup: Subgroup): Promise<void> {
     const inviteId = inviteIds.get(subgroup);
     if (!inviteId) {
-      setFeedback("Активной ссылки для этой подгруппы нет");
+      showToast("Активной ссылки для этой подгруппы нет");
       return;
     }
     try {
@@ -144,9 +165,9 @@ export function AdminPanel(): React.JSX.Element {
         next.delete(subgroup);
         return next;
       });
-      setFeedback(`Ссылка отозвана для подгруппы ${subgroup}`);
+      showToast(`Ссылка отозвана для подгруппы ${subgroup}`);
     } catch {
-      setFeedback("Не удалось отозвать ссылку. Попробуй позже.");
+      showToast("Не удалось отозвать ссылку. Попробуй позже.");
     }
   }
 
@@ -154,11 +175,87 @@ export function AdminPanel(): React.JSX.Element {
     try {
       await api.setUserRole(student.id, "elder");
       setStudentRoles(
-        new Map(students.map((item) => [item.id, item.id === student.id ? "Староста" : "Студент"])),
+        new Map(
+          students.map((item) => [
+            item.id,
+            item.id === student.id ? "Староста" : "Студент",
+          ]),
+        ),
       );
-      setFeedback(`${student.name} теперь староста`);
+      showToast(`${student.name} теперь староста`);
     } catch {
-      setFeedback("Не удалось сменить старосту. Попробуй позже.");
+      showToast("Не удалось сменить старосту. Попробуй позже.");
+    }
+  }
+
+  async function handleSetRole(
+    student: Student,
+    role: "elder" | "helper" | "student",
+  ): Promise<void> {
+    try {
+      await api.setUserRole(student.id, role);
+      const newRoleLabel: Student["role"] =
+        role === "elder" ? "Староста" : role === "helper" ? "Помощник" : "Студент";
+      setStudentRoles(
+        new Map(
+          students.map((item) => {
+            if (role === "elder") {
+              return [
+                item.id,
+                item.id === student.id
+                  ? "Староста"
+                  : item.id === currentUser?.id
+                    ? "Студент"
+                    : studentRoles.get(item.id) ?? item.role,
+              ];
+            }
+            return [
+              item.id,
+              item.id === student.id ? newRoleLabel : studentRoles.get(item.id) ?? item.role,
+            ];
+          }),
+        ),
+      );
+      showToast(`${student.name} теперь ${newRoleLabel.toLowerCase()}`);
+    } catch {
+      showToast("Не удалось изменить роль. Попробуй позже.");
+    }
+  }
+
+  async function handleGroupCreated(groupName: string): Promise<void> {
+    showToast(`Группа «${groupName}» успешно создана! Вы назначены старостой.`);
+    const updated = await api.getMe();
+    if (updated) {
+      setCurrentUser(updated);
+      setCanManage(true);
+      setActiveTab("invites");
+      const [remoteInvites, remoteUsers] = await Promise.all([
+        api.listInvites().catch(() => [] as ApiInvite[]),
+        api.listUsers().catch(() => [] as ApiUser[]),
+      ]);
+      setInvitations((current) =>
+        current.map((invitation) => {
+          const found = remoteInvites.find(
+            (invite) => invite.subgroup_number === invitation.subgroup,
+          );
+          return found
+            ? { subgroup: invitation.subgroup, link: found.invite_url }
+            : invitation;
+        }),
+      );
+      setInviteIds(
+        new Map(
+          remoteInvites
+            .filter((invite) => invite.subgroup_number === 1 || invite.subgroup_number === 2)
+            .map((invite) => [invite.subgroup_number as Subgroup, invite.id]),
+        ),
+      );
+      const mapped = remoteUsers.map(toStudent);
+      setStudents(mapped);
+      setStudentRoles(new Map(mapped.map((s) => [s.id, s.role])));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("user-updated"));
+      }
     }
   }
 
@@ -189,25 +286,40 @@ export function AdminPanel(): React.JSX.Element {
           Студенты
           {activeTab === "students" ? <span className="admin-tab-indicator" aria-hidden="true" /> : null}
         </button>
-        <button
-          className={`admin-tab-btn${activeTab === "create_group" ? " is-active" : ""}`}
-          id="create-group-tab"
-          type="button"
-          role="tab"
-          aria-controls="create-group-panel"
-          aria-selected={activeTab === "create_group"}
-          onClick={() => setActiveTab("create_group")}
-        >
-          Создать группу
-          {activeTab === "create_group" ? <span className="admin-tab-indicator" aria-hidden="true" /> : null}
-        </button>
+        {showCreateGroupTab ? (
+          <button
+            className={`admin-tab-btn${activeTab === "create_group" ? " is-active" : ""}`}
+            id="create-group-tab"
+            type="button"
+            role="tab"
+            aria-controls="create-group-panel"
+            aria-selected={activeTab === "create_group"}
+            onClick={() => setActiveTab("create_group")}
+          >
+            Создать группу
+            {activeTab === "create_group" ? <span className="admin-tab-indicator" aria-hidden="true" /> : null}
+          </button>
+        ) : null}
       </div>
 
-      {!canManage ? (
+      {activeTab === "create_group" && showCreateGroupTab ? (
+        <div id="create-group-panel" role="tabpanel" aria-labelledby="create-group-tab">
+          <CreateGroupCard onSuccess={handleGroupCreated} />
+        </div>
+      ) : !canManage ? (
         <p className="kanban-empty">
           Управление доступно старосте и администратору группы.
         </p>
-      ) : activeTab === "invites" ? (
+      ) : activeTab === "students" ? (
+        <div id="students-panel" role="tabpanel" aria-labelledby="students-tab">
+          <StudentsList
+            students={students}
+            studentRoles={studentRoles}
+            onMakeHead={makeHead}
+            onSetRole={handleSetRole}
+          />
+        </div>
+      ) : (
         <section
           className="invite-grid"
           id="invites-panel"
@@ -224,28 +336,7 @@ export function AdminPanel(): React.JSX.Element {
             />
           ))}
         </section>
-      ) : activeTab === "students" ? (
-        <div id="students-panel" role="tabpanel" aria-labelledby="students-tab">
-          <StudentsList
-            students={students}
-            studentRoles={studentRoles}
-            onMakeHead={makeHead}
-          />
-        </div>
-      ) : (
-        <div id="create-group-panel" role="tabpanel" aria-labelledby="create-group-tab">
-          <CreateGroupCard
-            onSuccess={(groupName) => {
-              setFeedback(`Группа «${groupName}» успешно создана! Вы назначены старостой.`);
-              setActiveTab("invites");
-            }}
-          />
-        </div>
       )}
-
-      <p className="sr-only" role="status" aria-live="polite">
-        {feedback}
-      </p>
     </div>
   );
 }

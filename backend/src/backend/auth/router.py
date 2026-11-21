@@ -27,10 +27,12 @@ from backend.auth.dependencies import (
 from backend.auth.models import InviteToken, RoleEnum, User
 from backend.auth.schemas import (
     BotUserResponse,
+    DevLoginRequest,
     ElderInviteCreateRequest,
     GroupCreateRequest,
     GroupResponse,
     InviteResponse,
+    JoinGroupRequest,
     RoleInviteCreateRequest,
     StudentInviteCreateRequest,
     TelegramBotAuthRequest,
@@ -226,6 +228,7 @@ async def login_dev(
     response: Response,
     service: Annotated[AuthService, Depends(get_auth_service)],
     settings: Annotated[Settings, Depends(get_settings)],
+    payload: DevLoginRequest | None = None,
 ) -> TokenResponse:
     """Local development login that never requires Telegram credentials."""
     if not settings.dev_login_enabled or settings.environment.lower() == "production":
@@ -234,10 +237,12 @@ async def login_dev(
             detail="Dev login is disabled",
         )
 
+    invite_token = payload.invite_token if payload else None
     user, access_token, raw_refresh = await service.get_or_create_user(
         telegram_id=settings.dev_login_telegram_id,
         display_name="Тестовый пользователь",
         username="dev_login",
+        invite_token=invite_token,
         user_agent=request.headers.get("user-agent"),
         ip_address=request.client.host if request.client else None,
     )
@@ -346,7 +351,7 @@ async def update_user_role(
     current_user: RequireElder,
     service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserResponse:
-    """Assign the elder or student role inside the actor's own group."""
+    """Assign the elder, helper or student role inside the actor's own group."""
     try:
         user = await service.set_user_role(current_user, user_id, payload.role)
     except LookupError as err:
@@ -384,6 +389,24 @@ async def create_group_self_service(
         ) from err
 
     return GroupResponse.model_validate(group)
+
+
+@router.post("/groups/leave", response_model=UserResponse)
+async def leave_group(
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> UserResponse:
+    """Leave current group.
+
+    If elder, requires transferring role first or being sole member.
+    """
+    try:
+        user = await service.leave_group(current_user)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    resp = UserResponse.model_validate(user)
+    resp.group_name = None
+    return resp
 
 
 @router.post("/invites/elder", response_model=InviteResponse)
@@ -456,6 +479,28 @@ async def create_role_invite(
     return resp
 
 
+@router.post("/invites/join", response_model=UserResponse)
+async def join_group_by_invite(
+    payload: JoinGroupRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> UserResponse:
+    """Join a group using an invite token for an authenticated user."""
+    try:
+        user = await service.apply_invite_to_user(current_user, payload.token)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(err),
+        ) from err
+
+    stmt = select(User).options(selectinload(User.group)).where(User.id == user.id)
+    user_with_group = (await service.session.execute(stmt)).scalar_one()
+    resp = UserResponse.model_validate(user_with_group)
+    resp.group_name = user_with_group.group.name if user_with_group.group else None
+    return resp
+
+
 @router.get("/invites", response_model=list[InviteResponse])
 async def list_invites(
     current_user: RequireElder,
@@ -473,6 +518,7 @@ async def list_invites(
     for inv in invites:
         item = InviteResponse.model_validate(inv)
         item.invite_url = f"/invite/{inv.id}"
+        item.token = str(inv.id)
         items.append(item)
     return items
 

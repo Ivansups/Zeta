@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { ToastProvider } from "@/components/ui/toast";
 import { api, type ApiUser } from "@/lib/api";
 import { currentSemesterLabel, currentStudyWeek } from "@/lib/week";
 
@@ -78,108 +79,123 @@ export function AppShell({ active, children, user }: AppShellProps): React.JSX.E
       return;
     }
     let cancelled = false;
-    void api.getMe().then((remote) => {
-      if (!cancelled) {
-        setCurrentUser(remote ? toShellUser(remote) : null);
-      }
-    });
+
+    function fetchUser(): void {
+      void api.getMe().then((remote) => {
+        if (!cancelled) {
+          setCurrentUser(remote ? toShellUser(remote) : null);
+        }
+      });
+    }
+
+    fetchUser();
+
+    function handleUserUpdated(): void {
+      fetchUser();
+    }
+
+    window.addEventListener("user-updated", handleUserUpdated);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("user-updated", handleUserUpdated);
     };
   }, [user]);
 
   const displayedUser = user !== undefined ? user : currentUser ?? null;
 
   return (
-    <div className="app-frame">
-      <aside className="sidebar" aria-label="Основная навигация">
-        <Link className="brand" href="/" aria-label="Zeta — главная">
-          <span className="brand-mark" aria-hidden="true">
-            <GraduationCap size={21} strokeWidth={2.2} />
-          </span>
-          <span>Zeta</span>
-        </Link>
+    <ToastProvider>
+      <div className="app-frame">
+        <aside className="sidebar" aria-label="Основная навигация">
+          <Link className="brand" href="/" aria-label="Zeta — главная">
+            <span className="brand-mark" aria-hidden="true">
+              <GraduationCap size={21} strokeWidth={2.2} />
+            </span>
+            <span>Zeta</span>
+          </Link>
 
-        <nav className="sidebar-nav">
-          <p className="nav-label">Пространство</p>
+          <nav className="sidebar-nav">
+            <p className="nav-label">Пространство</p>
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.id === active;
+              return (
+                <Link
+                  key={item.id}
+                  className={`nav-item${isActive ? " is-active" : ""}`}
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <Icon size={19} strokeWidth={1.9} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="sidebar-spacer" />
+          <div className="semester-card">
+            <LayoutDashboard size={18} aria-hidden="true" />
+            <div>
+              <strong>{semester}</strong>
+              <span>{week} учебная неделя</span>
+            </div>
+          </div>
+
+          {displayedUser ? (
+            <div className="profile-row">
+              <span className="avatar avatar-blue">
+                {displayedUser.initials || displayedUser.name.slice(0, 2).toUpperCase()}
+              </span>
+              <div>
+                <strong>{displayedUser.name}</strong>
+                <span>
+                  {[displayedUser.role, displayedUser.group].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="sidebar-login-prompt">
+              <Link className="sidebar-login-btn" href="/login">
+                <LogIn size={18} strokeWidth={2} />
+                <span>Войти через Telegram</span>
+              </Link>
+            </div>
+          )}
+        </aside>
+
+        <main className="app-content">{children}</main>
+
+        <nav className="mobile-nav" aria-label="Мобильная навигация">
           {navigation.map((item) => {
             const Icon = item.icon;
             const isActive = item.id === active;
             return (
               <Link
                 key={item.id}
-                className={`nav-item${isActive ? " is-active" : ""}`}
+                className={isActive ? "is-active" : ""}
                 href={item.href}
+                aria-label={item.label}
                 aria-current={isActive ? "page" : undefined}
               >
-                <Icon size={19} strokeWidth={1.9} />
+                <Icon size={21} strokeWidth={1.9} />
                 <span>{item.label}</span>
               </Link>
             );
           })}
-        </nav>
-
-        <div className="sidebar-spacer" />
-        <div className="semester-card">
-          <LayoutDashboard size={18} aria-hidden="true" />
-          <div>
-            <strong>{semester}</strong>
-            <span>{week} учебная неделя</span>
-          </div>
-        </div>
-
-        {displayedUser ? (
-          <div className="profile-row">
-            <span className="avatar avatar-blue">
-              {displayedUser.initials || displayedUser.name.slice(0, 2).toUpperCase()}
-            </span>
-            <div>
-              <strong>{displayedUser.name}</strong>
-              <span>
-                {[displayedUser.role, displayedUser.group].filter(Boolean).join(" · ")}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="sidebar-login-prompt">
-            <Link className="sidebar-login-btn" href="/login">
-              <LogIn size={18} strokeWidth={2} />
-              <span>Войти через Telegram</span>
-            </Link>
-          </div>
-        )}
-      </aside>
-
-      <main className="app-content">{children}</main>
-
-      <nav className="mobile-nav" aria-label="Мобильная навигация">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const isActive = item.id === active;
-          return (
+          {!displayedUser ? (
             <Link
-              key={item.id}
-              className={isActive ? "is-active" : ""}
-              href={item.href}
-              aria-label={item.label}
-              aria-current={isActive ? "page" : undefined}
+              className="mobile-login-link"
+              href="/login"
+              aria-label="Войти через Telegram"
             >
-              <Icon size={21} strokeWidth={1.9} />
-              <span>{item.label}</span>
+              <LogIn size={21} strokeWidth={1.9} />
+              <span>Вход</span>
             </Link>
-          );
-        })}
-        {!displayedUser ? (
-          <Link
-            className="mobile-login-link"
-            href="/login"
-            aria-label="Войти через Telegram"
-          >
-            <LogIn size={21} strokeWidth={1.9} />
-            <span>Вход</span>
-          </Link>
-        ) : null}
-      </nav>
-    </div>
+          ) : null}
+        </nav>
+      </div>
+    </ToastProvider>
   );
 }

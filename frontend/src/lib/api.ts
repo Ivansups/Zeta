@@ -1,19 +1,33 @@
-/**
- * Client API layer for Zeta frontend.
- * Interacts with backend through Next.js proxy route `/api/*`.
- */
-
+export type ApiSchedulePair = {
+  id: string;
+  group_id?: string;
+  group_name: string;
+  day_of_week: string;
+  pair_number: number;
+  start_time: string;
+  end_time: string;
+  subject: string;
+  subject_id?: string | null;
+  lesson_type?: string | null;
+  teacher?: string | null;
+  teacher_title?: string | null;
+  room?: string | null;
+  is_online: boolean;
+  subgroup?: number | null;
+  week_parity?: string | null;
+  notes?: string[] | null;
+};
 
 export type ApiUser = {
   id: string;
   telegram_id: number;
   role: "admin" | "elder" | "helper" | "curator" | "student" | "guest";
-  display_name?: string | null;
-  username?: string | null;
-  photo_url?: string | null;
   group_id?: string | null;
   group_name?: string | null;
   subgroup_number?: number | null;
+  display_name?: string | null;
+  username?: string | null;
+  photo_url?: string | null;
 };
 
 export type ApiGroup = {
@@ -24,24 +38,14 @@ export type ApiGroup = {
   created_at: string;
 };
 
-export type ApiSchedulePair = {
-  id: string;
-  group_id: string;
-  group_name?: string | null;
+export type ApiHomeworkInput = {
+  title?: string;
+  description: string;
+  deadline: string;
+  subject?: string;
   subgroup?: number | null;
-  day_of_week: string;
-  pair_number: number;
-  start_time: string;
-  end_time: string;
-  week_parity?: string | null;
-  subject: string;
-  subject_id?: string | null;
-  teacher?: string | null;
-  teacher_title?: string | null;
-  room?: string | null;
-  is_online: boolean;
-  lesson_type?: string | null;
-  notes: string[];
+  schedule_pair_id?: string | null;
+  group_id?: string;
 };
 
 export type ApiHomework = {
@@ -59,18 +63,22 @@ export type ApiHomework = {
   updated_at: string;
 };
 
-export type ApiHomeworkInput = {
-  title: string;
-  description: string;
-  subject?: string;
-  deadline: string;
+export type ApiHomeworkDraft = {
+  id: string;
+  user_id: string;
+  group_id: string;
+  title?: string | null;
+  subject?: string | null;
+  description?: string | null;
+  deadline?: string | null;
   subgroup?: number | null;
-  group_id?: string;
-  schedule_pair_id?: string;
+  expires_at: string;
+  raw_text: string;
 };
 
 export type ApiHomeworkPreview = {
   subject: string;
+  subject_id?: string | null;
   description: string;
   deadline: string | null;
   subgroup: number | null;
@@ -134,11 +142,11 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function jsonInit(method: string, body: unknown): RequestInit {
+function jsonInit(method: string, body?: unknown): RequestInit {
   return {
     method,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   };
 }
 
@@ -158,6 +166,11 @@ export const api = {
   async createGroup(data: { name: string; faculty?: string; university?: string }): Promise<ApiGroup> {
     const res = await request("/api/auth/groups", jsonInit("POST", data));
     return handleResponse<ApiGroup>(res);
+  },
+
+  async leaveGroup(): Promise<ApiUser> {
+    const res = await request("/api/auth/groups/leave", jsonInit("POST"));
+    return handleResponse<ApiUser>(res);
   },
 
   async getDaySchedule(params: {
@@ -257,12 +270,23 @@ export const api = {
     }
   },
 
+  async joinGroup(inviteToken: string): Promise<ApiUser> {
+    const res = await request(
+      "/api/auth/invites/join",
+      jsonInit("POST", { token: inviteToken }),
+    );
+    return handleResponse<ApiUser>(res);
+  },
+
   async listUsers(): Promise<ApiUser[]> {
     const res = await request("/api/auth/users", { method: "GET" });
     return handleResponse<ApiUser[]>(res);
   },
 
-  async setUserRole(userId: string, role: "elder" | "student"): Promise<ApiUser> {
+  async setUserRole(
+    userId: string,
+    role: "elder" | "student" | "helper",
+  ): Promise<ApiUser> {
     const res = await request(
       `/api/auth/users/${userId}/role`,
       jsonInit("PATCH", { role }),
