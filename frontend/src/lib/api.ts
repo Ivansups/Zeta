@@ -3,7 +3,6 @@
  * Interacts with backend through Next.js proxy route `/api/*`.
  */
 
-import type { Lesson, Student, Subgroup } from "./types";
 
 export type ApiUser = {
   id: string;

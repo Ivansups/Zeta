@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -84,7 +85,7 @@ async def test_homework_parse_and_confirm_draft() -> None:
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
 
-    def mock_scalar(val):
+    def mock_scalar(val: Any) -> MagicMock:
         m = MagicMock()
         m.scalar_one_or_none.return_value = val
         return m

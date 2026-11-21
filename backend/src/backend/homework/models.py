@@ -88,9 +88,7 @@ class HomeworkDraft(Base):
     subject: Mapped[str] = mapped_column(String(256), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     subgroup: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    deadline: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )

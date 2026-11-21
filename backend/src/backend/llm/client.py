@@ -35,7 +35,10 @@ class LangChainLLMClient:
     @classmethod
     def from_settings(cls, settings: Settings) -> "LangChainLLMClient":
         """Build a client for the configured OpenAI-compatible endpoint."""
-        if settings.llm_api_key is None or not settings.llm_api_key.get_secret_value().strip():
+        if (
+            settings.llm_api_key is None
+            or not settings.llm_api_key.get_secret_value().strip()
+        ):
             raise ValueError("LLM_API_KEY is not configured")
         return cls(
             ChatOpenAI(

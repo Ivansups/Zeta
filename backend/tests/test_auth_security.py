@@ -4,7 +4,9 @@ import time
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 
+from backend.auth.dependencies import verify_telegram_user_allowed
 from backend.auth.security import (
     create_access_token,
     decode_access_token,
@@ -13,9 +15,6 @@ from backend.auth.security import (
     validate_telegram_webapp_init_data,
     validate_telegram_widget_data,
 )
-
-from fastapi import HTTPException
-from backend.auth.dependencies import verify_telegram_user_allowed
 from backend.config import Settings
 
 BOT_TOKEN = "1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ_TestingToken32Chars"
@@ -228,7 +227,6 @@ def test_decode_access_token_invalid_or_expired() -> None:
     wrong_secret = "anothersecretkeythatisatleast32byteslongaswell!"
     with pytest.raises(ValueError, match="Invalid access token"):
         decode_access_token(valid_token, wrong_secret)
-
 
 
 def test_verify_telegram_user_allowed_when_empty() -> None:

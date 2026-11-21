@@ -60,7 +60,7 @@ class BackendClient:
         internal_secret: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        """Initialize the backend client with base URL, timeout, and internal auth secret."""
+        """Initialize backend client with base URL, timeout, and secret."""
         self._base_url = base_url.rstrip("/")
         headers = {}
         if internal_secret:

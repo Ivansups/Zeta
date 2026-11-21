@@ -67,6 +67,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     op.drop_index(op.f("ix_homework_drafts_expires_at"), table_name="homework_drafts")
-    op.drop_index(op.f("ix_homework_drafts_created_by_id"), table_name="homework_drafts")
+    op.drop_index(
+        op.f("ix_homework_drafts_created_by_id"), table_name="homework_drafts"
+    )
     op.drop_index(op.f("ix_homework_drafts_group_id"), table_name="homework_drafts")
     op.drop_table("homework_drafts")
