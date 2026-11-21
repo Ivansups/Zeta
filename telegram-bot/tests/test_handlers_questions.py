@@ -75,8 +75,10 @@ def test_looks_like_question_true(text: str) -> None:
     assert looks_like_question(text) is True
 
 
-@pytest.mark.parametrize("text", ["привет", "/start", "ДЗ матан: номер 12", "", "  "])
-def test_looks_like_question_false(text: str) -> None:
+@pytest.mark.parametrize(
+    "text", ["привет", "/start", "ДЗ матан: номер 12", "", "  ", None]
+)
+def test_looks_like_question_false(text: str | None) -> None:
     assert looks_like_question(text) is False
 
 
