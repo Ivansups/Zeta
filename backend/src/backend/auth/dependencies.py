@@ -38,6 +38,31 @@ def verify_internal_api_secret(
         )
 
 
+def verify_telegram_user_allowed(
+    telegram_id: int,
+    username: str | None,
+    settings: Settings,
+) -> None:
+    """Check if telegram user is in allowed list when closed beta is active."""
+    if not settings.allowed_telegram_users or not settings.allowed_telegram_users.strip():
+        return
+
+    allowed_tokens = {
+        token.strip().lstrip("@").lower()
+        for token in re.split(r"[\s,;]+", settings.allowed_telegram_users)
+        if token.strip()
+    }
+
+    user_id_str = str(telegram_id)
+    uname_str = (username or "").lstrip("@").lower()
+
+    if user_id_str not in allowed_tokens and uname_str not in allowed_tokens:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Регистрация и вход временно доступны только участникам закрытого тестирования Zeta.",
+        )
+
+
 def get_auth_service(
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],

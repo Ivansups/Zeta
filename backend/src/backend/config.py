@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Internal API Secret for trusted bot-to-backend communication
     internal_api_secret: str | None = None
 
+    # Allowed Telegram users/IDs for closed beta testing (comma or space separated)
+    allowed_telegram_users: str | None = None
+
     # LLM (OpenAI-compatible)
     llm_api_key: SecretStr | None = None
     llm_base_url: str = "https://api.openai.com/v1"
