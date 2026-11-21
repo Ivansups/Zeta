@@ -1,4 +1,4 @@
-"""Text parsing helpers for extracting subject, subgroup, and deadline from homework messages."""
+"""Text parsing helpers for extracting homework parameters."""
 
 import re
 from datetime import UTC, datetime, timedelta
@@ -44,9 +44,11 @@ def extract_subject(norm_text: str) -> str:
 
 def extract_subgroup(norm_text: str) -> int | None:
     """Detect subgroup 1 or 2 from text."""
-    if re.search(r"(\b1\s*подгрупп|подгрупп[а-я]*\s*1|перв[а-я]*\s*подгрупп)", norm_text):
+    pattern_sub1 = r"(\b1\s*подгрупп|подгрупп[а-я]*\s*1|перв[а-я]*\s*подгрупп)"
+    if re.search(pattern_sub1, norm_text):
         return 1
-    if re.search(r"(\b2\s*подгрупп|подгрупп[а-я]*\s*2|втор[а-я]*\s*подгрупп)", norm_text):
+    pattern_sub2 = r"(\b2\s*подгрупп|подгрупп[а-я]*\s*2|втор[а-я]*\s*подгрупп)"
+    if re.search(pattern_sub2, norm_text):
         return 2
     return None
 
@@ -71,7 +73,7 @@ def extract_deadline(norm_text: str, base_time: datetime | None = None) -> datet
 
 
 def clean_homework_description(text: str) -> str:
-    """Strip keywords, day names, and prefixes leaving only the actual homework instructions."""
+    """Strip keywords, day names, and prefixes leaving homework instructions."""
     cleaned = re.sub(r"(?i)^дз[:\s]*", "", text).strip()
     cleaned = re.sub(
         r"(?i)(?:для\s*)?(?:[12]\s*подгрупп[а-я]*|вся\s*группа|для\s*всех)",

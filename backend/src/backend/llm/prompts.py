@@ -11,7 +11,7 @@ def build_schedule_cell_prompt(raw_text: str) -> str:
 
 
 def build_student_qa_prompt(question: str, context: str) -> str:
-    """Construct the prompt for answering student questions about homework and schedule."""
+    """Build prompt for answering questions about homework and schedule."""
     return (
         "Ты — дружелюбный и лаконичный студенческий ассистент платформы Zeta.\n"
         "Отвечай на русском языке строго по делу, опираясь на данные ниже.\n\n"

@@ -46,7 +46,7 @@ async def ask_llm(
     settings: Annotated[Settings, Depends(get_settings)],
     _: Annotated[None, Depends(verify_internal_api_secret)],
 ) -> AskResponse:
-    """Answer student questions about homework and schedule using LLM or structured context."""
+    """Answer student questions using LLM or structured context."""
     stmt = select(User).where(User.telegram_id == payload.telegram_id)
     res = await session.execute(stmt)
     user = res.scalar_one_or_none()
@@ -93,7 +93,9 @@ async def ask_llm(
             hw_context_lines = []
             for item in items:
                 subgroup_str = (
-                    f" (подгруппа {item.subgroup})" if item.subgroup else " (вся группа)"
+                    f" (подгруппа {item.subgroup})"
+                    if item.subgroup
+                    else " (вся группа)"
                 )
                 deadline_str = f", дедлайн: {item.deadline}" if item.deadline else ""
                 hw_context_lines.append(
@@ -106,7 +108,9 @@ async def ask_llm(
                 else "Нет актуальных домашних заданий."
             )
 
-            prompt = build_student_qa_prompt(question=payload.question, context=hw_context)
+            prompt = build_student_qa_prompt(
+                question=payload.question, context=hw_context
+            )
             llm_answer = await llm_client.ainvoke_text(prompt)
             return AskResponse(answer=llm_answer.strip(), items=items)
         except Exception as err:

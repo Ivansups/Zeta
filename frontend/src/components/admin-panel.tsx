@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type ApiUser } from "@/lib/api";
+import { api } from "@/lib/api";
 import { students } from "@/lib/mock-data";
 import type { Student, Subgroup } from "@/lib/types";
 

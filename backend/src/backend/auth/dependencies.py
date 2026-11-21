@@ -44,7 +44,10 @@ def verify_telegram_user_allowed(
     settings: Settings,
 ) -> None:
     """Check if telegram user is in allowed list when closed beta is active."""
-    if not settings.allowed_telegram_users or not settings.allowed_telegram_users.strip():
+    if (
+        not settings.allowed_telegram_users
+        or not settings.allowed_telegram_users.strip()
+    ):
         return
 
     allowed_tokens = {
@@ -57,9 +60,13 @@ def verify_telegram_user_allowed(
     uname_str = (username or "").lstrip("@").lower()
 
     if user_id_str not in allowed_tokens and uname_str not in allowed_tokens:
+        msg = (
+            "Регистрация и вход временно доступны только "
+            "участникам закрытого тестирования Zeta."
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Регистрация и вход временно доступны только участникам закрытого тестирования Zeta.",
+            detail=msg,
         )
 
 

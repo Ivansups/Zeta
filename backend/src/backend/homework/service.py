@@ -97,7 +97,7 @@ class HomeworkService:
     ) -> list[Homework]:
         """Query homeworks filtered by group and user role.
 
-        Students only see their own group. Admin sees everything if group_id is not specified.
+        Students see own group. Admin sees everything if group_id is omitted.
         """
         stmt = (
             select(Homework)
@@ -124,9 +124,10 @@ class HomeworkService:
             effective_subgroup = user.subgroup_number
 
         if effective_subgroup is not None:
-            stmt = stmt.where(
-                (Homework.subgroup.is_(None)) | (Homework.subgroup == effective_subgroup)
+            subgroup_filter = (Homework.subgroup.is_(None)) | (
+                Homework.subgroup == effective_subgroup
             )
+            stmt = stmt.where(subgroup_filter)
 
         if date_from:
             stmt = stmt.where(Homework.deadline >= date_from)
@@ -218,7 +219,7 @@ class HomeworkService:
     async def parse_text_to_draft(
         self, text: str, user: User, ttl_seconds: int = 900
     ) -> HomeworkDraftResponse:
-        """Parse unstructured homework text into structured draft persisted in Postgres."""
+        """Parse homework text into structured draft persisted in Postgres."""
         if not user.group_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
