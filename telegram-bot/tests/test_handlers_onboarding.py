@@ -96,7 +96,6 @@ async def test_unknown_message_handler(mock_message: MagicMock) -> None:
     assert "/help" in text
 
 
-
 async def test_start_handler_with_invite_deep_link(
     mock_message: MagicMock, dummy_settings: Settings
 ) -> None:

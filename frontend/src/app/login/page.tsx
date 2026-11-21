@@ -40,6 +40,7 @@ function LoginForm(): React.JSX.Element {
   useEffect(() => {
     if (state === "confirmed") {
       const timer = window.setTimeout(() => {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.href = "/";
       }, 700);
       return () => window.clearTimeout(timer);
@@ -209,7 +210,8 @@ function LoginForm(): React.JSX.Element {
               href="/"
               onClick={(e) => {
                 e.preventDefault();
-                window.location.href = "/";
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = "/";
               }}
             >
               Открыть расписание

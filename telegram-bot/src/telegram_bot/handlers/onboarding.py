@@ -43,7 +43,8 @@ async def start_handler(
     if invite_token:
         text = (
             f"Привет, {user_name}! 👋\n\n"
-            "Ты перешёл по ссылке-приглашению в учебную группу на платформе <b>Zeta</b>.\n\n"
+            "Ты перешёл по ссылке-приглашению в учебную группу "
+            "на платформе <b>Zeta</b>.\n\n"
             "Нажми кнопку ниже, чтобы войти в веб-кабинет и автоматически "
             "присоединиться к своей группе!"
         )
@@ -60,7 +61,10 @@ async def start_handler(
             "или отправь /help для справки."
         )
 
-    keyboard = build_onboarding_keyboard(settings.web_app_url, invite_token=invite_token)
+    keyboard = build_onboarding_keyboard(
+        settings.web_app_url,
+        invite_token=invite_token,
+    )
     await message.answer(text, reply_markup=keyboard)
 
 
