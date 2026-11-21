@@ -88,7 +88,12 @@ function LoginForm(): React.JSX.Element {
       setState("authenticating");
       setErrorMessage(null);
 
-      const response = await fetch("/api/auth/dev-login", { method: "POST" });
+      const devLoginInit: RequestInit = { method: "POST" };
+      if (inviteToken) {
+        devLoginInit.headers = { "Content-Type": "application/json" };
+        devLoginInit.body = JSON.stringify({ invite_token: inviteToken });
+      }
+      const response = await fetch("/api/auth/dev-login", devLoginInit);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(

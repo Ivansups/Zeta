@@ -101,6 +101,7 @@ export function ScheduleDashboard(): React.JSX.Element {
   const [groupName, setGroupName] = useState<string>("");
   const [canManage, setCanManage] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [hasGroup, setHasGroup] = useState(true);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [editorState, setEditorState] = useState<{
     open: boolean;
@@ -130,6 +131,13 @@ export function ScheduleDashboard(): React.JSX.Element {
       const scope = { group_id: user.group_id || undefined };
       setCanManage(canManageHomework(user));
       setSubgroup(user.subgroup_number === 2 ? 2 : 1);
+
+      if (!user.group_id) {
+        setHasGroup(false);
+        setLoaded(true);
+        return;
+      }
+      setHasGroup(true);
 
       const [weekPairs_, homeworkList] = await Promise.all([
         api.getWeekSchedule(scope).catch(() => []),
@@ -457,6 +465,38 @@ export function ScheduleDashboard(): React.JSX.Element {
 
             {!loaded ? (
               <p className="kanban-empty">Загружаем расписание…</p>
+            ) : !hasGroup ? (
+              <div
+                className="onboarding-no-group-card"
+                style={{
+                  padding: "32px 24px",
+                  textAlign: "center",
+                  background: "var(--card-bg, #ffffff)",
+                  borderRadius: "16px",
+                  border: "1px dashed var(--border-color, #e2e8f0)",
+                  margin: "12px 0",
+                }}
+              >
+                <h2 style={{ fontSize: "18px", marginBottom: "8px" }}>
+                  У вас пока нет учебной группы
+                </h2>
+                <p
+                  style={{
+                    color: "var(--muted, #64748b)",
+                    maxWidth: "480px",
+                    margin: "0 auto 20px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Чтобы видеть расписание занятий и актуальные домашние задания,
+                  создайте свою группу или перейдите по ссылке-приглашению от старосты.
+                </p>
+                <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                  <a href="/admin" className="button button-primary">
+                    Создать группу
+                  </a>
+                </div>
+              </div>
             ) : dayLessons.length === 0 ? (
               <p className="kanban-empty">На этот день пар нет</p>
             ) : (
