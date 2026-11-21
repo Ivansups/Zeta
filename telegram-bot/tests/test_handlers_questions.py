@@ -145,3 +145,17 @@ async def test_question_handler_reports_backend_outage(
 def test_settings_has_question_throttle() -> None:
     settings = Settings(bot_token=SecretStr("123456:TEST"))
     assert settings.question_throttle_seconds > 0
+
+
+async def test_question_handler_reports_closed_beta(
+    message: MagicMock,
+    backend: MagicMock,
+    bot: MagicMock,
+) -> None:
+    backend.ask_question.side_effect = BackendAPIError(403, "closed beta")
+    throttle = QuestionThrottle(interval=5.0)
+
+    await question_handler(message, cast(BackendClient, backend), throttle, bot)
+
+    text = message.answer.call_args.args[0]
+    assert "закрыт" in text.lower()
