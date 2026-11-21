@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import {
   TelegramLoginButton,
@@ -36,6 +36,15 @@ function LoginForm(): React.JSX.Element {
   const [state, setState] = useState<LoginState>("idle");
   const [userName, setUserName] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state === "confirmed") {
+      const timer = window.setTimeout(() => {
+        window.location.href = "/";
+      }, 700);
+      return () => window.clearTimeout(timer);
+    }
+  }, [state]);
 
   async function handleTelegramAuth(user: TelegramUser): Promise<void> {
     try {
@@ -187,10 +196,17 @@ function LoginForm(): React.JSX.Element {
             <h1>Вы вошли</h1>
             <p className="login-copy">
               {userName
-                ? `Профиль ${userName} подтверждён. Можно переходить к расписанию.`
-                : "Профиль найден. Можно переходить к расписанию."}
+                ? `Профиль ${userName} подтверждён. Переходим к расписанию...`
+                : "Профиль найден. Переходим к расписанию..."}
             </p>
-            <Link className="button button-primary login-button" href="/">
+            <Link
+              className="button button-primary login-button"
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.href = "/";
+              }}
+            >
               Открыть расписание
               <ArrowRight size={18} />
             </Link>
