@@ -53,6 +53,21 @@ class HomeworkParseRequest(BaseModel):
     text: str
 
 
+class HomeworkParsePreviewRequest(BaseModel):
+    """Free-form text submitted from the web editor for parsing."""
+
+    text: str = Field(..., min_length=1)
+
+
+class HomeworkParsePreview(BaseModel):
+    """Parsed homework fields shown to the user before saving."""
+
+    subject: str
+    description: str
+    deadline: datetime | None = None
+    subgroup: int | None = None
+
+
 class HomeworkDraftResponse(BaseModel):
     draft_id: str
     subject: str
@@ -74,3 +89,13 @@ class ConfirmedHomeworkResponse(BaseModel):
     deadline: datetime | None = None
     pair_number: int | None = None
     subgroup: int | None = None
+
+
+class HomeworkCancelRequest(BaseModel):
+    telegram_id: int
+    draft_id: str
+
+
+class CancelDraftResponse(BaseModel):
+    status: str = "ok"
+    draft_id: str

@@ -36,6 +36,6 @@ export type Student = {
   name: string;
   initials: string;
   subgroup: Subgroup;
-  role: "Староста" | "Студент";
+  role: "Староста" | "Помощник" | "Студент";
   color: "blue" | "green" | "coral" | "violet";
 };

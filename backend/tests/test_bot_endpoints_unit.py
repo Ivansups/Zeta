@@ -63,6 +63,7 @@ async def test_bot_user_endpoint_known_and_guest() -> None:
 @pytest.mark.asyncio
 async def test_homework_parse_and_confirm_draft() -> None:
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     group_id = uuid.uuid4()
     elder_user = User(
         id=uuid.uuid4(),
@@ -133,6 +134,65 @@ async def test_homework_parse_and_confirm_draft() -> None:
             confirmed = confirm_resp.json()
             assert "id" in confirmed
             assert confirmed["subgroup"] == 1
+    finally:
+        app.dependency_overrides.pop(get_session, None)
+
+
+@pytest.mark.asyncio
+async def test_homework_cancel_draft() -> None:
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+    group_id = uuid.uuid4()
+    elder_user = User(
+        id=uuid.uuid4(),
+        telegram_id=111222333,
+        role=RoleEnum.ELDER.value,
+        group_id=group_id,
+        subgroup_number=1,
+    )
+
+    from datetime import UTC, datetime, timedelta
+
+    draft_record = HomeworkDraft(
+        id=uuid.uuid4(),
+        group_id=group_id,
+        created_by_id=elder_user.id,
+        subject="Математический анализ",
+        description="номера 12-18",
+        subgroup=1,
+        deadline=datetime.now(UTC) + timedelta(days=2),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+
+    def mock_scalar(val: Any) -> MagicMock:
+        m = MagicMock()
+        m.scalar_one_or_none.return_value = val
+        return m
+
+    # Call 1: cancel -> select(User)
+    # Call 2: cancel -> select(HomeworkDraft)
+    mock_session.execute.side_effect = [
+        mock_scalar(elder_user),
+        mock_scalar(draft_record),
+    ]
+
+    app.dependency_overrides[get_session] = lambda: mock_session
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            cancel_resp = await client.post(
+                "/homework/cancel-draft",
+                json={
+                    "telegram_id": 111222333,
+                    "draft_id": str(draft_record.id),
+                },
+            )
+            assert cancel_resp.status_code == 200
+            data = cancel_resp.json()
+            assert data["status"] == "ok"
+            assert data["draft_id"] == str(draft_record.id)
+            mock_session.delete.assert_awaited_once_with(draft_record)
+            mock_session.commit.assert_awaited_once()
     finally:
         app.dependency_overrides.pop(get_session, None)
 

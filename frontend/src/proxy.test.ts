@@ -35,7 +35,7 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it.each(["/login", "/tg-app"])("keeps %s public", (path) => {
+  it.each(["/login", "/tg-app", "/invite"])("keeps %s public", (path) => {
     const response = proxy(makeRequest(path));
 
     expect(response.headers.get("location")).toBeNull();
@@ -43,6 +43,15 @@ describe("proxy", () => {
 
   it("never blocks the API proxy route", () => {
     const response = proxy(makeRequest("/api/auth/me"));
+
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("lets the page render when only the refresh token is left", () => {
+    const request = new NextRequest(new URL("http://localhost/"));
+    request.cookies.set("refresh_token", "refresh");
+
+    const response = proxy(request);
 
     expect(response.headers.get("location")).toBeNull();
   });

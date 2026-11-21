@@ -20,6 +20,7 @@ from backend.homework.schemas import (
     ConfirmedHomeworkResponse,
     HomeworkCreate,
     HomeworkDraftResponse,
+    HomeworkParsePreview,
     HomeworkUpdate,
 )
 from backend.schedule.db_models import SchedulePair
@@ -84,7 +85,9 @@ class HomeworkService:
         )
         self.session.add(hw)
         await self.session.commit()
-        await self.session.refresh(hw)
+        # The response mapper reads hw.group; load it explicitly to avoid an
+        # implicit lazy load outside the async greenlet context.
+        await self.session.refresh(hw, attribute_names=["group"])
         return hw
 
     async def get_homeworks(
@@ -120,7 +123,7 @@ class HomeworkService:
             stmt = stmt.where(Homework.group_id == effective_group_id)
 
         effective_subgroup = subgroup
-        if user.role == RoleEnum.STUDENT.value and user.subgroup_number:
+        if effective_subgroup is None and user.role == RoleEnum.STUDENT.value:
             effective_subgroup = user.subgroup_number
 
         if effective_subgroup is not None:
@@ -178,7 +181,7 @@ class HomeworkService:
             hw.description = data.description.strip()
         if data.deadline is not None:
             hw.deadline = data.deadline
-        if data.subgroup is not None:
+        if "subgroup" in data.model_fields_set:
             hw.subgroup = data.subgroup
         if data.subject is not None:
             hw.subject = data.subject.strip()
@@ -220,6 +223,35 @@ class HomeworkService:
         self, text: str, user: User, ttl_seconds: int = 900
     ) -> HomeworkDraftResponse:
         """Parse homework text into structured draft persisted in Postgres."""
+        group_id = self.require_manager_group(user)
+        preview = self.parse_preview(text)
+
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(seconds=ttl_seconds)
+
+        draft = HomeworkDraft(
+            group_id=group_id,
+            created_by_id=user.id,
+            subject=preview.subject,
+            description=preview.description,
+            subgroup=preview.subgroup,
+            deadline=preview.deadline,
+            expires_at=expires_at,
+        )
+        self.session.add(draft)
+        await self.session.commit()
+        await self.session.refresh(draft)
+
+        return HomeworkDraftResponse(
+            draft_id=str(draft.id),
+            subject=preview.subject,
+            description=preview.description,
+            deadline=preview.deadline,
+            subgroup=preview.subgroup,
+        )
+
+    def require_manager_group(self, user: User) -> uuid.UUID:
+        """Ensure the user may manage homework for their own group."""
         if not user.group_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -230,35 +262,16 @@ class HomeworkService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only elder, helper or admin may create homework drafts",
             )
+        return user.group_id
 
+    def parse_preview(self, text: str) -> HomeworkParsePreview:
+        """Extract subject, description, deadline and subgroup from free text."""
         norm = text.lower()
-        subject = extract_subject(norm)
-        subgroup = extract_subgroup(norm)
-        deadline = extract_deadline(norm)
-        cleaned = clean_homework_description(text)
-
-        now = datetime.now(UTC)
-        expires_at = now + timedelta(seconds=ttl_seconds)
-
-        draft = HomeworkDraft(
-            group_id=user.group_id,
-            created_by_id=user.id,
-            subject=subject,
-            description=cleaned,
-            subgroup=subgroup,
-            deadline=deadline,
-            expires_at=expires_at,
-        )
-        self.session.add(draft)
-        await self.session.commit()
-        await self.session.refresh(draft)
-
-        return HomeworkDraftResponse(
-            draft_id=str(draft.id),
-            subject=subject,
-            description=cleaned,
-            deadline=deadline,
-            subgroup=subgroup,
+        return HomeworkParsePreview(
+            subject=extract_subject(norm),
+            description=clean_homework_description(text),
+            deadline=extract_deadline(norm),
+            subgroup=extract_subgroup(norm),
         )
 
     async def confirm_draft(
@@ -287,6 +300,15 @@ class HomeworkService:
                 detail="Draft not found or expired",
             )
 
+        if not self._is_privileged_for_group(user, draft.group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Only elder, helper or admin of the group "
+                    "may confirm homework drafts"
+                ),
+            )
+
         hw = Homework(
             group_id=draft.group_id,
             title=draft.subject,
@@ -308,3 +330,35 @@ class HomeworkService:
             deadline=hw.deadline,
             subgroup=hw.subgroup,
         )
+
+    async def cancel_draft(self, user: User, draft_id: str) -> None:
+        """Cancel and remove a draft from database."""
+        try:
+            draft_uuid = uuid.UUID(draft_id)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Draft not found or expired",
+            ) from err
+
+        stmt = select(HomeworkDraft).where(HomeworkDraft.id == draft_uuid)
+        res = await self.session.execute(stmt)
+        draft = res.scalar_one_or_none()
+
+        if not draft:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Draft not found or expired",
+            )
+
+        if not self._is_privileged_for_group(user, draft.group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Only elder, helper or admin of the group "
+                    "may cancel homework drafts"
+                ),
+            )
+
+        await self.session.delete(draft)
+        await self.session.commit()

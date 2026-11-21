@@ -136,6 +136,7 @@ async def test_get_me_authenticated(
     assert me_resp.json()["telegram_id"] == 3003
 
     # Неавторизованный запрос
+    client.cookies.clear()
     anon_resp = await client.get("/auth/me")
     assert anon_resp.status_code == 401
 
@@ -495,3 +496,290 @@ async def test_student_cannot_change_roles(
 
     assert resp.status_code == 403
     assert elder_id is not None
+
+
+async def test_get_me_returns_group_name(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    access = await _create_elder_with_group(client, test_settings, 8401, "ZK-05")
+
+    resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {access}"})
+
+    assert resp.status_code == 200
+    assert resp.json()["group_name"] == "ZK-05"
+
+
+async def test_dev_login_is_disabled_by_default(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    test_settings.dev_login_enabled = False
+
+    resp = await client.post("/auth/dev-login")
+
+    assert resp.status_code == 403
+
+
+async def test_dev_login_issues_token_when_enabled(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    test_settings.dev_login_enabled = True
+    test_settings.dev_login_telegram_id = 8402
+
+    resp = await client.post("/auth/dev-login")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["user"]["telegram_id"] == 8402
+    assert data["user"]["role"] == "student"
+
+
+async def test_dev_login_rejected_in_production(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    test_settings.dev_login_enabled = True
+    test_settings.environment = "production"
+
+    resp = await client.post("/auth/dev-login")
+
+    assert resp.status_code == 403
+
+
+async def test_login_sets_refresh_cookie_for_the_api_proxy(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    """The web client refreshes via /api/auth/refresh, so the cookie needs Path=/."""
+    data = make_widget_auth_data(
+        telegram_id=8403, bot_token=test_settings.telegram_bot_token
+    )
+
+    resp = await client.post("/auth/telegram/widget", json=data)
+
+    assert resp.status_code == 200
+    refresh_cookie = next(
+        cookie
+        for cookie in resp.headers.get_list("set-cookie")
+        if cookie.startswith("refresh_token=")
+    )
+    assert "Path=/;" in refresh_cookie or refresh_cookie.endswith("Path=/")
+
+
+async def test_join_group_by_invite_and_uuid_token(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    # 1. Elder creates group and invites
+    elder_data = make_widget_auth_data(
+        telegram_id=9001, bot_token=test_settings.telegram_bot_token
+    )
+    elder_login = await client.post("/auth/telegram/widget", json=elder_data)
+    elder_access = elder_login.json()["access_token"]
+    await client.post(
+        "/auth/groups",
+        json={"name": "SE-101"},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+
+    client.cookies.set("refresh_token", elder_login.cookies["refresh_token"])
+    elder_ref = await client.post("/auth/refresh")
+    elder_access = elder_ref.json()["access_token"]
+
+    stu_inv = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 2},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    raw_token = stu_inv.json()["token"]
+    invite_id = stu_inv.json()["id"]
+
+    # 2. Existing user logs in with no group
+    stu_data = make_widget_auth_data(
+        telegram_id=9002, bot_token=test_settings.telegram_bot_token
+    )
+    stu_login = await client.post("/auth/telegram/widget", json=stu_data)
+    stu_access = stu_login.json()["access_token"]
+    assert stu_login.json()["user"]["group_id"] is None
+
+    # 3. User joins group using POST /auth/invites/join with raw token
+    join_resp = await client.post(
+        "/auth/invites/join",
+        json={"token": raw_token},
+        headers={"Authorization": f"Bearer {stu_access}"},
+    )
+    assert join_resp.status_code == 200
+    user_data = join_resp.json()
+    assert user_data["group_name"] == "SE-101"
+    assert user_data["subgroup_number"] == 2
+    student_id = user_data["id"]
+
+    # 4. Elder promotes student to helper
+    role_resp = await client.patch(
+        f"/auth/users/{student_id}/role",
+        json={"role": "helper"},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    assert role_resp.status_code == 200
+    assert role_resp.json()["role"] == "helper"
+
+    # 5. Another user joins using the invite UUID (from list_invites)
+    user3_data = make_widget_auth_data(
+        telegram_id=9003, bot_token=test_settings.telegram_bot_token
+    )
+    user3_login = await client.post("/auth/telegram/widget", json=user3_data)
+    user3_access = user3_login.json()["access_token"]
+
+    join_uuid_resp = await client.post(
+        "/auth/invites/join",
+        json={"token": invite_id},
+        headers={"Authorization": f"Bearer {user3_access}"},
+    )
+    assert join_uuid_resp.status_code == 200
+    assert join_uuid_resp.json()["group_name"] == "SE-101"
+    assert join_uuid_resp.json()["subgroup_number"] == 2
+
+
+async def test_dev_login_with_invite_token(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    test_settings.dev_login_enabled = True
+    test_settings.dev_login_telegram_id = 9005
+
+    # Elder creates group & invite
+    elder_data = make_widget_auth_data(
+        telegram_id=9004, bot_token=test_settings.telegram_bot_token
+    )
+    elder_login = await client.post("/auth/telegram/widget", json=elder_data)
+    elder_access = elder_login.json()["access_token"]
+    await client.post(
+        "/auth/groups",
+        json={"name": "DEV-202"},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+
+    client.cookies.set("refresh_token", elder_login.cookies["refresh_token"])
+    elder_ref = await client.post("/auth/refresh")
+    elder_access = elder_ref.json()["access_token"]
+
+    stu_inv = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    raw_token = stu_inv.json()["token"]
+
+    # Dev login with invite_token
+    resp = await client.post("/auth/dev-login", json={"invite_token": raw_token})
+    assert resp.status_code == 200
+    assert resp.json()["user"]["group_id"] is not None
+    assert resp.json()["user"]["subgroup_number"] == 1
+
+
+async def test_create_group_already_in_group_fails(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    access = await _create_elder_with_group(client, test_settings, 8501, "FIRST-GRP")
+
+    resp = await client.post(
+        "/auth/groups",
+        json={"name": "SECOND-GRP"},
+        headers={"Authorization": f"Bearer {access}"},
+    )
+
+    assert resp.status_code == 400
+    assert "Пользователь уже состоит в группе" in resp.json()["detail"]
+
+
+async def test_leave_group_success_as_student(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(
+        client, test_settings, 8510, "STUDENT-LEAVE-GRP"
+    )
+    invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    student_data = make_widget_auth_data(
+        telegram_id=8511,
+        bot_token=test_settings.telegram_bot_token,
+        invite_token=invite.json()["token"],
+    )
+    student_login = await client.post("/auth/telegram/widget", json=student_data)
+    student_access = student_login.json()["access_token"]
+    assert student_login.json()["user"]["group_id"] is not None
+
+    leave_resp = await client.post(
+        "/auth/groups/leave",
+        headers={"Authorization": f"Bearer {student_access}"},
+    )
+
+    assert leave_resp.status_code == 200
+    data = leave_resp.json()
+    assert data["group_id"] is None
+    assert data["group_name"] is None
+    assert data["role"] == "student"
+
+
+async def test_leave_group_fails_for_elder_when_members_exist(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(
+        client, test_settings, 8520, "ELDER-FAIL-GRP"
+    )
+    invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    student_data = make_widget_auth_data(
+        telegram_id=8521,
+        bot_token=test_settings.telegram_bot_token,
+        invite_token=invite.json()["token"],
+    )
+    await client.post("/auth/telegram/widget", json=student_data)
+
+    resp = await client.post(
+        "/auth/groups/leave",
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+
+    assert resp.status_code == 400
+    assert "Вы староста группы" in resp.json()["detail"]
+
+
+async def test_leave_group_success_for_sole_elder(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(
+        client, test_settings, 8530, "SOLE-ELDER-GRP"
+    )
+
+    resp = await client.post(
+        "/auth/groups/leave",
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["group_id"] is None
+    assert data["group_name"] is None
+    assert data["role"] == "student"
+
+
+async def test_leave_group_not_in_group_fails(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    user_data = make_widget_auth_data(
+        telegram_id=8540,
+        bot_token=test_settings.telegram_bot_token,
+    )
+    user_login = await client.post("/auth/telegram/widget", json=user_data)
+    user_access = user_login.json()["access_token"]
+    assert user_login.json()["user"]["group_id"] is None
+
+    resp = await client.post(
+        "/auth/groups/leave",
+        headers={"Authorization": f"Bearer {user_access}"},
+    )
+
+    assert resp.status_code == 400
+    assert "Вы не состоите ни в одной группе" in resp.json()["detail"]

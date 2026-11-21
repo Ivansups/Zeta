@@ -14,6 +14,7 @@ jest.mock("@/lib/api", () => ({
     revokeInvite: jest.fn(),
     listUsers: jest.fn(),
     setUserRole: jest.fn(),
+    createGroup: jest.fn(),
   },
 }));
 
@@ -41,13 +42,20 @@ describe("AdminPage", () => {
     mockedApi.setUserRole.mockResolvedValue(
       apiUser({ id: "user-alina", role: "elder", display_name: "Алина Морозова" }),
     );
+    mockedApi.createGroup.mockResolvedValue({
+      id: "new-group-id",
+      name: "IU5-11B",
+      faculty: "ФИТ",
+      university: "МГТУ",
+      created_at: "2026-11-21T00:00:00Z",
+    });
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  it("shows invitation controls and marks management navigation active", async () => {
+  it("shows invitation controls and marks management navigation active, hiding create_group tab for elder", async () => {
     render(<AdminPage />);
 
     expect(
@@ -62,6 +70,7 @@ describe("AdminPage", () => {
       await screen.findByRole("tab", { name: "Приглашения" }),
     ).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByText("Подгруппа 1")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Создать группу" })).not.toBeInTheDocument();
   });
 
   it("creates, copies and revokes an invitation link with accessible feedback", async () => {
@@ -132,6 +141,67 @@ describe("AdminPage", () => {
     ).toHaveTextContent("Студент");
     expect(screen.getByRole("status")).toHaveTextContent(
       "Алина Морозова теперь староста",
+    );
+  });
+
+  it("allows promoting a student to helper", async () => {
+    const user = userEvent.setup();
+
+    render(<AdminPage />);
+
+    await screen.findByRole("button", { name: "Создать ссылку для подгруппы 1" });
+    await user.click(screen.getByRole("tab", { name: "Студенты" }));
+
+    await user.click(
+      screen.getByRole("button", { name: "Сделать помощником: Алина Морозова" }),
+    );
+
+    expect(mockedApi.setUserRole).toHaveBeenCalledWith("user-alina", "helper");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Алина Морозова теперь помощник",
+    );
+  });
+
+  it("shows create_group tab if user is an admin even when in a group", async () => {
+    mockedApi.getMe.mockResolvedValue(
+      apiUser({ id: "admin-1", role: "admin", group_id: "group-1" }),
+    );
+
+    render(<AdminPage />);
+
+    expect(await screen.findByRole("tab", { name: "Создать группу" })).toBeInTheDocument();
+  });
+
+  it("defaults to create_group tab when user has no group and allows creating one with toast feedback", async () => {
+    mockedApi.getMe
+      .mockResolvedValueOnce(
+        apiUser({ id: "newbie", role: "student", group_id: null }),
+      )
+      .mockResolvedValueOnce(
+        apiUser({ id: "newbie", role: "elder", group_id: "new-group-id", group_name: "IU5-11B" }),
+      );
+    const user = userEvent.setup();
+
+    render(<AdminPage />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Создать новую учебную группу" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Создать группу" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await user.type(screen.getByPlaceholderText("Например, ПИ-221"), "IU5-11B");
+    await user.click(
+      screen.getByRole("button", { name: "Зарегистрировать группу" }),
+    );
+
+    expect(mockedApi.createGroup).toHaveBeenCalledWith({
+      name: "IU5-11B",
+    });
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Группа «IU5-11B» успешно создана! Вы назначены старостой.",
     );
   });
 });

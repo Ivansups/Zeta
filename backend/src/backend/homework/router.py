@@ -13,10 +13,14 @@ from backend.auth.models import User
 from backend.db.session import get_session
 from backend.homework.models import Homework
 from backend.homework.schemas import (
+    CancelDraftResponse,
     ConfirmedHomeworkResponse,
+    HomeworkCancelRequest,
     HomeworkConfirmRequest,
     HomeworkCreate,
     HomeworkDraftResponse,
+    HomeworkParsePreview,
+    HomeworkParsePreviewRequest,
     HomeworkParseRequest,
     HomeworkRead,
     HomeworkUpdate,
@@ -75,6 +79,18 @@ async def list_homeworks(
         date_to=date_to,
     )
     return [_map_homework_to_read(hw) for hw in items]
+
+
+@router.post("/parse", response_model=HomeworkParsePreview)
+async def parse_homework_for_web(
+    payload: HomeworkParsePreviewRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HomeworkParsePreview:
+    """Parse free-form text for the web editor without persisting a draft."""
+    service = HomeworkService(session=session)
+    service.require_manager_group(current_user)
+    return service.parse_preview(payload.text)
 
 
 @router.get("/{homework_id}", response_model=HomeworkRead)
@@ -151,3 +167,23 @@ async def confirm_homework_draft(
         )
     service = HomeworkService(session=session)
     return await service.confirm_draft(user=user, draft_id=payload.draft_id)
+
+
+@router.post("/cancel-draft", response_model=CancelDraftResponse)
+async def cancel_homework_draft(
+    payload: HomeworkCancelRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[None, Depends(verify_internal_api_secret)],
+) -> CancelDraftResponse:
+    """Cancel and delete a parsed homework draft."""
+    stmt = select(User).where(User.telegram_id == payload.telegram_id)
+    res = await session.execute(stmt)
+    user = res.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not registered in Zeta",
+        )
+    service = HomeworkService(session=session)
+    await service.cancel_draft(user=user, draft_id=payload.draft_id)
+    return CancelDraftResponse(status="ok", draft_id=payload.draft_id)

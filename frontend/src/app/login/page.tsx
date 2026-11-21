@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import {
   TelegramLoginButton,
@@ -22,9 +22,6 @@ import {
 type LoginState = "idle" | "authenticating" | "confirmed" | "error";
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "";
-const SHOW_DEV_LOGIN =
-  process.env.NODE_ENV !== "production" ||
-  process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === "true";
 
 function LoginForm(): React.JSX.Element {
   const searchParams = useSearchParams();
@@ -39,6 +36,16 @@ function LoginForm(): React.JSX.Element {
   const [state, setState] = useState<LoginState>("idle");
   const [userName, setUserName] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state === "confirmed") {
+      const timer = window.setTimeout(() => {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = "/";
+      }, 700);
+      return () => window.clearTimeout(timer);
+    }
+  }, [state]);
 
   async function handleTelegramAuth(user: TelegramUser): Promise<void> {
     try {
@@ -79,44 +86,26 @@ function LoginForm(): React.JSX.Element {
 
   async function handleDevLogin(): Promise<void> {
     try {
-      const authDate = Math.floor(Date.now() / 1000);
-      const data: Record<string, string | number> = {
-        auth_date: authDate,
-        first_name: "Иван",
-        id: 156587029,
-        last_name: "Климов",
-        username: "ivanklimov",
-      };
-      const checkString = Object.keys(data)
-        .sort()
-        .map((k) => `${k}=${data[k]}`)
-        .join("\n");
+      setState("authenticating");
+      setErrorMessage(null);
 
-      const enc = new TextEncoder();
-      const secretKeyHash = await crypto.subtle.digest(
-        "SHA-256",
-        enc.encode("mock-bot-token"),
-      );
-      const key = await crypto.subtle.importKey(
-        "raw",
-        secretKeyHash,
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-      );
-      const sig = await crypto.subtle.sign("HMAC", key, enc.encode(checkString));
-      const hash = Array.from(new Uint8Array(sig))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+      const devLoginInit: RequestInit = { method: "POST" };
+      if (inviteToken) {
+        devLoginInit.headers = { "Content-Type": "application/json" };
+        devLoginInit.body = JSON.stringify({ invite_token: inviteToken });
+      }
+      const response = await fetch("/api/auth/dev-login", devLoginInit);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          (errorData as { detail?: string }).detail ||
+            "Тестовый вход отключён на сервере",
+        );
+      }
 
-      await handleTelegramAuth({
-        id: Number(data.id),
-        first_name: String(data.first_name),
-        last_name: String(data.last_name),
-        username: String(data.username),
-        auth_date: Number(data.auth_date),
-        hash,
-      });
+      const data = await response.json();
+      setUserName(data.user?.display_name || "Тестовый пользователь");
+      setState("confirmed");
     } catch (err: unknown) {
       setErrorMessage(
         err instanceof Error ? err.message : "Ошибка тестовой авторизации",
@@ -124,6 +113,9 @@ function LoginForm(): React.JSX.Element {
       setState("error");
     }
   }
+
+  const showDevLogin =
+    process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === "true";
 
   return (
     <main className="login-page">
@@ -183,7 +175,7 @@ function LoginForm(): React.JSX.Element {
               />
             </div>
 
-            {SHOW_DEV_LOGIN ? (
+            {showDevLogin ? (
               <button
                 type="button"
                 className="button button-secondary dev-login-btn"
@@ -210,10 +202,18 @@ function LoginForm(): React.JSX.Element {
             <h1>Вы вошли</h1>
             <p className="login-copy">
               {userName
-                ? `Профиль ${userName} подтверждён. Можно переходить к расписанию.`
-                : "Профиль найден. Можно переходить к расписанию."}
+                ? `Профиль ${userName} подтверждён. Переходим к расписанию...`
+                : "Профиль найден. Переходим к расписанию..."}
             </p>
-            <Link className="button button-primary login-button" href="/">
+            <Link
+              className="button button-primary login-button"
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = "/";
+              }}
+            >
               Открыть расписание
               <ArrowRight size={18} />
             </Link>

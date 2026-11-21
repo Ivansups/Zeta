@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, Sparkles, X } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, LoaderCircle, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { parseHomeworkPrompt } from "@/lib/llm-parser";
+import type { ApiHomeworkPreview } from "@/lib/api";
 import type { HomeworkDraft, Lesson, Subgroup } from "@/lib/types";
 
 type HomeworkEditorProps = {
@@ -18,7 +18,9 @@ type HomeworkEditorProps = {
     dueDate?: string;
   } | null;
   onClose: () => void;
-  onSave: (draft: HomeworkDraft) => void;
+  onSave: (draft: HomeworkDraft) => Promise<void> | void;
+  onDelete?: (homeworkId: string) => Promise<void> | void;
+  onParse?: (text: string) => Promise<ApiHomeworkPreview>;
 };
 
 function HomeworkEditorForm({
@@ -27,11 +29,17 @@ function HomeworkEditorForm({
   initialData,
   onClose,
   onSave,
+  onDelete,
+  onParse,
 }: Omit<HomeworkEditorProps, "open">): React.JSX.Element {
   const isEdit = Boolean(initialData?.id);
   const [mode, setMode] = useState<"form" | "assistant">(initialMode);
   const [assistantStage, setAssistantStage] = useState<"input" | "preview">("input");
   const [assistantPrompt, setAssistantPrompt] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const defaultLesson =
     lessons.find((lesson) => lesson.id === initialData?.lessonId) ?? lessons[0];
@@ -52,12 +60,23 @@ function HomeworkEditorForm({
 
   const selectedLesson = lessons.find((lesson) => lesson.id === lessonId) ?? lessons[0];
 
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   function resetAndClose(): void {
     setMode("form");
     setAssistantStage("input");
     setAssistantPrompt("");
     setDescription("");
     setErrors({});
+    setSubmitError("");
     onClose();
   }
 
@@ -74,26 +93,50 @@ function HomeworkEditorForm({
     }
   }
 
-  function handleAssistantParse(): void {
+  async function handleAssistantParse(): Promise<void> {
     if (!assistantPrompt.trim()) {
       setErrors({ assistantPrompt: "Введите текст задания для разбора" });
       return;
     }
+    if (!onParse) {
+      setErrors({ assistantPrompt: "Ассистент сейчас недоступен" });
+      return;
+    }
 
-    const parsed = parseHomeworkPrompt(assistantPrompt, lessons);
-    setLessonId(parsed.lessonId);
-    setSubgroup(parsed.subgroup ?? "all");
-    setDueDate(parsed.dueDate);
-    setDescription(parsed.description);
-    setAssistantStage("preview");
-    setErrors({});
+    setParsing(true);
+    setSubmitError("");
+    try {
+      const parsed = await onParse(assistantPrompt);
+      const targetLesson = lessons.find((lesson) => lesson.subject === parsed.subject);
+      if (targetLesson) {
+        setLessonId(targetLesson.id);
+      }
+      if (parsed.subgroup === 1 || parsed.subgroup === 2) {
+        setSubgroup(parsed.subgroup);
+      } else {
+        setSubgroup("all");
+      }
+      if (parsed.deadline) {
+        setDueDate(parsed.deadline.slice(0, 10));
+      }
+      setDescription(parsed.description);
+      setAssistantStage("preview");
+      setErrors({});
+    } catch (error) {
+      setErrors({
+        assistantPrompt:
+          error instanceof Error ? error.message : "Не удалось разобрать текст",
+      });
+    } finally {
+      setParsing(false);
+    }
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>): void {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
     if (mode === "assistant" && assistantStage === "input") {
-      handleAssistantParse();
+      await handleAssistantParse();
       return;
     }
 
@@ -112,14 +155,47 @@ function HomeworkEditorForm({
       return;
     }
 
-    onSave({
-      ...(initialData?.id ? { id: initialData.id } : {}),
-      lessonId,
-      subgroup,
-      dueDate: dueDate.trim() || selectedLesson?.date || "",
-      description: description.trim(),
-    });
-    resetAndClose();
+    setSaving(true);
+    setSubmitError("");
+    try {
+      await onSave({
+        ...(initialData?.id ? { id: initialData.id } : {}),
+        lessonId,
+        subgroup,
+        dueDate: dueDate.trim() || selectedLesson?.date || "",
+        description: description.trim(),
+      });
+      resetAndClose();
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Не удалось сохранить задание",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(): Promise<void> {
+    if (!onDelete || !initialData?.id) {
+      return;
+    }
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+
+    setSaving(true);
+    setSubmitError("");
+    try {
+      await onDelete(initialData.id);
+      resetAndClose();
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Не удалось удалить задание",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -186,7 +262,7 @@ function HomeworkEditorForm({
             <>
               <div className="assistant-note">
                 <Sparkles size={18} />
-                <p>Опишите задание своими словами. Языковая модель распознает предмет, дату и задание.</p>
+                <p>Опишите задание своими словами. Сервер распознает предмет, дату и задание.</p>
               </div>
               <label className="field-label" htmlFor="assistant-prompt">
                 Текст для разбора
@@ -215,9 +291,10 @@ function HomeworkEditorForm({
                 <button
                   className="button button-primary"
                   type="button"
-                  onClick={handleAssistantParse}
+                  onClick={() => void handleAssistantParse()}
+                  disabled={parsing}
                 >
-                  <Sparkles size={16} />
+                  {parsing ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
                   Разобрать текст
                 </button>
               </div>
@@ -316,7 +393,24 @@ function HomeworkEditorForm({
                 </p>
               ) : null}
 
+              {submitError ? (
+                <p className="field-error" role="alert">
+                  {submitError}
+                </p>
+              ) : null}
+
               <div className="modal-actions">
+                {isEdit && onDelete ? (
+                  <button
+                    className="button button-danger"
+                    type="button"
+                    onClick={() => void handleDelete()}
+                    disabled={saving}
+                  >
+                    <Trash2 size={16} />
+                    {confirmingDelete ? "Удалить безвозвратно" : "Удалить"}
+                  </button>
+                ) : null}
                 {mode === "assistant" && assistantStage === "preview" ? (
                   <button
                     className="button button-secondary"
@@ -331,7 +425,7 @@ function HomeworkEditorForm({
                     Отмена
                   </button>
                 )}
-                <button className="button button-primary" type="submit">
+                <button className="button button-primary" type="submit" disabled={saving}>
                   {mode === "assistant"
                     ? "Сохранить в расписание"
                     : isEdit
@@ -354,6 +448,8 @@ export function HomeworkEditor({
   initialData,
   onClose,
   onSave,
+  onDelete,
+  onParse,
 }: HomeworkEditorProps): React.JSX.Element | null {
   if (!open) {
     return null;
@@ -369,6 +465,8 @@ export function HomeworkEditor({
       initialData={initialData}
       onClose={onClose}
       onSave={onSave}
+      onDelete={onDelete}
+      onParse={onParse}
     />
   );
 }

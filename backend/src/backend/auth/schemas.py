@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserRoleUpdateRequest(BaseModel):
-    role: str
+    role: str = Field(..., pattern="^(elder|helper|student)$")
 
 
 class UserResponse(BaseModel):
@@ -15,6 +15,7 @@ class UserResponse(BaseModel):
     telegram_id: int
     role: str
     group_id: uuid.UUID | None = None
+    group_name: str | None = None
     subgroup_number: int | None = None
     display_name: str | None = None
     username: str | None = None
@@ -59,6 +60,10 @@ class TelegramWebAppAuthRequest(BaseModel):
     invite_token: str | None = None
 
 
+class DevLoginRequest(BaseModel):
+    invite_token: str | None = None
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"  # noqa: S105
@@ -75,6 +80,10 @@ class StudentInviteCreateRequest(BaseModel):
 
 class RoleInviteCreateRequest(BaseModel):
     role: str = Field(..., pattern="^(helper|curator)$")
+
+
+class JoinGroupRequest(BaseModel):
+    token: str = Field(..., min_length=1)
 
 
 class InviteResponse(BaseModel):

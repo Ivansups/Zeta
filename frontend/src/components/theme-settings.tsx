@@ -3,6 +3,7 @@
 import { Bell, ChevronRight, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { GroupSettings } from "@/components/group-settings";
 import { api } from "@/lib/api";
 
 export function ThemeSettings(): React.JSX.Element {
@@ -55,6 +56,11 @@ export function ThemeSettings(): React.JSX.Element {
             <ChevronRight size={18} />
           </button>
         </div>
+      </section>
+
+      <section className="settings-section">
+        <h2>Учебная группа</h2>
+        <GroupSettings />
       </section>
 
       <section className="settings-section">
