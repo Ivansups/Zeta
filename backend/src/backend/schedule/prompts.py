@@ -1,10 +1,8 @@
-"""Prompt templates for schedule cell parsing."""
+"""Prompt templates for schedule cell parsing.
 
+Re-exported from centralized backend.llm.prompts for backward compatibility.
+"""
 
-def build_schedule_cell_prompt(raw_text: str) -> str:
-    """Construct the prompt for extracting fields from one schedule cell."""
-    return (
-        "Ты — парсер расписания вуза. Извлеки структурированную информацию "
-        "из текста одной ячейки таблицы.\n\n"
-        f"Текст ячейки: '{raw_text}'"
-    )
+from backend.llm.prompts import build_schedule_cell_prompt
+
+__all__ = ["build_schedule_cell_prompt"]

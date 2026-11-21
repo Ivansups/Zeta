@@ -35,7 +35,10 @@ class LangChainLLMClient:
     @classmethod
     def from_settings(cls, settings: Settings) -> "LangChainLLMClient":
         """Build a client for the configured OpenAI-compatible endpoint."""
-        if settings.llm_api_key is None:
+        if (
+            settings.llm_api_key is None
+            or not settings.llm_api_key.get_secret_value().strip()
+        ):
             raise ValueError("LLM_API_KEY is not configured")
         return cls(
             ChatOpenAI(
@@ -61,3 +64,15 @@ class LangChainLLMClient:
                 f"LLM returned {type(result).__name__}, expected {schema.__name__}"
             )
         return result
+
+    async def ainvoke_text(self, prompt: str) -> str:
+        """Invoke underlying chat model and return raw string answer."""
+        response = await self._chat_model.ainvoke(prompt)
+        content = getattr(response, "content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(
+                item if isinstance(item, str) else str(item) for item in content
+            )
+        return str(content)

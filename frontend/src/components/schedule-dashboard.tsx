@@ -2,23 +2,69 @@
 
 import {
   BookOpen,
-  ChevronLeft,
   ChevronRight,
   Plus,
   Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { api, type ApiHomework, type ApiSchedulePair } from "@/lib/api";
 import { lessons, weekDays } from "@/lib/mock-data";
 import type { HomeworkDraft, Lesson, Subgroup } from "@/lib/types";
 
 import { HomeworkEditor } from "./homework-editor";
 import { LessonCard } from "./lesson-card";
 
+function mapApiPairToLesson(pair: ApiSchedulePair, homeworks: ApiHomework[]): Lesson {
+  const matchingHw = homeworks.find(
+    (hw) =>
+      hw.schedule_pair_id === pair.id ||
+      (hw.subject?.toLowerCase() === pair.subject.toLowerCase())
+  );
+
+  const kindMap: Record<string, "Лекция" | "Практика" | "Лабораторная"> = {
+    "лек": "Лекция",
+    "прак": "Практика",
+    "лаб": "Лабораторная",
+  };
+
+  const kind = (pair.lesson_type && kindMap[pair.lesson_type.toLowerCase()]) || "Практика";
+
+  const accentMap: Record<number, "blue" | "green" | "coral" | "violet"> = {
+    1: "blue",
+    2: "green",
+    3: "coral",
+    4: "violet",
+  };
+
+  return {
+    id: pair.id,
+    date: "2026-10-15",
+    dayLabel: `${pair.day_of_week}`,
+    time: pair.start_time.slice(0, 5),
+    endTime: pair.end_time.slice(0, 5),
+    subject: pair.subject,
+    teacher: [pair.teacher_title, pair.teacher].filter(Boolean).join(" ") || "Преподаватель",
+    location: pair.room ? `ауд. ${pair.room}` : pair.is_online ? "Онлайн" : "Корпус 1",
+    kind,
+    subgroup: (pair.subgroup as Subgroup) || "all",
+    accent: accentMap[pair.pair_number] || "blue",
+    homework: matchingHw
+      ? {
+          id: matchingHw.id,
+          description: matchingHw.description,
+          dueDate: matchingHw.deadline.slice(0, 10),
+          subgroup: (matchingHw.subgroup as Subgroup) || "all",
+        }
+      : undefined,
+  };
+}
+
 export function ScheduleDashboard(): React.JSX.Element {
   const [subgroup, setSubgroup] = useState<Subgroup>(1);
   const [view, setView] = useState<"day" | "week">("day");
   const [lessonList, setLessonList] = useState<Lesson[]>(lessons);
+  const [groupName, setGroupName] = useState<string>("ПИ-221");
   const [editorState, setEditorState] = useState<{
     open: boolean;
     mode?: "form" | "assistant";
@@ -31,6 +77,43 @@ export function ScheduleDashboard(): React.JSX.Element {
     } | null;
   }>({ open: false, mode: "form", initialData: null });
   const [savedMessage, setSavedMessage] = useState("");
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadData(): Promise<void> {
+      try {
+        const user = await api.getMe();
+        if (isCancelled) return;
+
+        const gName = user?.group_id ? undefined : "ПИ-221";
+        const [pairs, homeworks] = await Promise.all([
+          api.getDaySchedule({
+            day: "Понедельник",
+            group_name: gName,
+            group_id: user?.group_id || undefined,
+          }).catch(() => []),
+          api.getHomeworks({ group_id: user?.group_id || undefined }).catch(() => []),
+        ]);
+
+        if (isCancelled) return;
+
+        if (pairs.length > 0) {
+          const mapped = pairs.map((p) => mapApiPairToLesson(p, homeworks));
+          setLessonList(mapped);
+          if (pairs[0].group_name) {
+            setGroupName(pairs[0].group_name);
+          }
+        }
+      } catch {
+      }
+    }
+
+    void loadData();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (savedMessage) {
@@ -98,6 +181,18 @@ export function ScheduleDashboard(): React.JSX.Element {
 
     const lesson = lessonList.find((item) => item.id === draft.lessonId);
     setEditorState({ open: false, mode: "form", initialData: null });
+
+    const deadlineIso = draft.dueDate ? `${draft.dueDate}T23:59:00Z` : new Date().toISOString();
+    void api.createHomework({
+      title: draft.subject || lesson?.subject || "Домашнее задание",
+      description: draft.description,
+      subject: draft.subject || lesson?.subject,
+      deadline: deadlineIso,
+      subgroup: draft.subgroup === "all" ? undefined : (draft.subgroup as number),
+      schedule_pair_id: draft.lessonId.length === 36 ? draft.lessonId : undefined,
+    }).catch(() => {
+    });
+
     const message = isEdit
       ? `Задание для «${lesson?.subject ?? "пары"}» обновлено`
       : `Задание для «${lesson?.subject ?? "пары"}» сохранено`;
@@ -110,7 +205,7 @@ export function ScheduleDashboard(): React.JSX.Element {
         <div>
           <p className="eyebrow">Четверг · числитель</p>
           <h1>Расписание</h1>
-          <p className="page-subtitle">ПИ-221 · 7 учебная неделя</p>
+          <p className="page-subtitle">{groupName} · 7 учебная неделя</p>
         </div>
         <div className="header-actions">
           <button
@@ -151,19 +246,7 @@ export function ScheduleDashboard(): React.JSX.Element {
           </button>
         </div>
 
-        <div className="date-navigation">
-          <button className="icon-button" type="button" aria-label="Предыдущий день">
-            <ChevronLeft size={18} strokeWidth={1.8} />
-          </button>
-          <button className="today-button" type="button">
-            Сегодня
-          </button>
-          <button className="icon-button" type="button" aria-label="Следующий день">
-            <ChevronRight size={18} strokeWidth={1.8} />
-          </button>
-        </div>
-
-        <div className="segmented-control subgroup-control" role="group" aria-label="Подгруппа">
+        <div className="segmented-control" role="group" aria-label="Подгруппа">
           <button
             className={subgroup === 1 ? "is-active" : ""}
             type="button"

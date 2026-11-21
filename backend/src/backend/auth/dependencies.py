@@ -1,3 +1,5 @@
+import hmac
+import re
 import uuid
 from collections.abc import Callable
 from typing import Annotated
@@ -15,6 +17,57 @@ from backend.db.session import get_session
 
 def get_settings() -> Settings:
     return Settings()
+
+
+def verify_internal_api_secret(
+    settings: Annotated[Settings, Depends(get_settings)],
+    x_internal_secret: Annotated[str | None, Header(alias="X-Internal-Secret")] = None,
+) -> None:
+    """Verify internal secret header for trusted bot-to-backend communication.
+
+    Uses constant-time comparison (hmac.compare_digest) to prevent timing attacks.
+    """
+    if not settings.internal_api_secret:
+        return
+    if not x_internal_secret or not hmac.compare_digest(
+        x_internal_secret, settings.internal_api_secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: invalid or missing X-Internal-Secret",
+        )
+
+
+def verify_telegram_user_allowed(
+    telegram_id: int,
+    username: str | None,
+    settings: Settings,
+) -> None:
+    """Check if telegram user is in allowed list when closed beta is active."""
+    if (
+        not settings.allowed_telegram_users
+        or not settings.allowed_telegram_users.strip()
+    ):
+        return
+
+    allowed_tokens = {
+        token.strip().lstrip("@").lower()
+        for token in re.split(r"[\s,;]+", settings.allowed_telegram_users)
+        if token.strip()
+    }
+
+    user_id_str = str(telegram_id)
+    uname_str = (username or "").lstrip("@").lower()
+
+    if user_id_str not in allowed_tokens and uname_str not in allowed_tokens:
+        msg = (
+            "Регистрация и вход временно доступны только "
+            "участникам закрытого тестирования Zeta."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=msg,
+        )
 
 
 def get_auth_service(
@@ -89,7 +142,6 @@ async def get_current_user(
             detail="User not found",
         )
 
-    # Проверка актуальности token_version
     if user.token_version != token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

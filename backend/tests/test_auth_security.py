@@ -4,7 +4,9 @@ import time
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 
+from backend.auth.dependencies import verify_telegram_user_allowed
 from backend.auth.security import (
     create_access_token,
     decode_access_token,
@@ -13,6 +15,7 @@ from backend.auth.security import (
     validate_telegram_webapp_init_data,
     validate_telegram_widget_data,
 )
+from backend.config import Settings
 
 BOT_TOKEN = "1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ_TestingToken32Chars"
 JWT_SECRET = "supersecretjwtkeythatisatleast32byteslongforsecurity!"
@@ -224,3 +227,32 @@ def test_decode_access_token_invalid_or_expired() -> None:
     wrong_secret = "anothersecretkeythatisatleast32byteslongaswell!"
     with pytest.raises(ValueError, match="Invalid access token"):
         decode_access_token(valid_token, wrong_secret)
+
+
+def test_verify_telegram_user_allowed_when_empty() -> None:
+    settings = Settings(allowed_telegram_users=None)
+    # Should not raise
+    verify_telegram_user_allowed(12345, "anyone", settings)
+
+    settings_empty = Settings(allowed_telegram_users="   ")
+    verify_telegram_user_allowed(12345, "anyone", settings_empty)
+
+
+def test_verify_telegram_user_allowed_whitelist_filter() -> None:
+    settings = Settings(
+        allowed_telegram_users="5235206255 622949618, 1153418028; @alice_test"
+    )
+
+    # Allowed by ID
+    verify_telegram_user_allowed(5235206255, "random_nick", settings)
+    verify_telegram_user_allowed(622949618, None, settings)
+
+    # Allowed by username (case-insensitive, with/without @)
+    verify_telegram_user_allowed(999999999, "alice_test", settings)
+    verify_telegram_user_allowed(999999999, "@Alice_Test", settings)
+
+    # Rejected user
+    with pytest.raises(HTTPException) as exc_info:
+        verify_telegram_user_allowed(999999999, "stranger", settings)
+    assert exc_info.value.status_code == 403
+    assert "закрытого тестирования" in exc_info.value.detail

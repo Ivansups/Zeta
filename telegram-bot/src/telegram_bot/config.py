@@ -29,6 +29,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("BACKEND_BASE_URL", "BACKEND_URL"),
         description="Base URL of Zeta backend API",
     )
+    backend_internal_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("BACKEND_INTERNAL_SECRET", "INTERNAL_API_SECRET"),
+        description="Internal secret header for authenticating bot requests to backend",
+    )
     web_app_url: str = Field(
         default="http://localhost:3000",
         validation_alias=AliasChoices("WEB_APP_URL", "FRONTEND_URL"),
