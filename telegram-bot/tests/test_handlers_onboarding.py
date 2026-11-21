@@ -94,3 +94,25 @@ async def test_unknown_message_handler(mock_message: MagicMock) -> None:
     text = args[0] if args else kwargs.get("text", "")
     assert "не понимаю" in text.lower()
     assert "/help" in text
+
+
+
+async def test_start_handler_with_invite_deep_link(
+    mock_message: MagicMock, dummy_settings: Settings
+) -> None:
+    from aiogram.filters import CommandObject
+
+    cmd = CommandObject(prefix="/", command="start", args="invite_secret123")
+    await start_handler(mock_message, dummy_settings, command=cmd)
+
+    mock_message.answer.assert_called_once()
+    args, kwargs = mock_message.answer.call_args
+    text = args[0] if args else kwargs.get("text", "")
+    assert "приглашению" in text
+
+    reply_markup = kwargs.get("reply_markup")
+    assert any(
+        button.url == "https://test.zeta.local/invite/secret123"
+        for row in reply_markup.inline_keyboard
+        for button in row
+    )

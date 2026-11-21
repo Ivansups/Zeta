@@ -4,7 +4,7 @@ import html
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import CallbackQuery, Message
 
 from telegram_bot.config import Settings
@@ -23,22 +23,44 @@ router = Router(name="onboarding")
 
 
 @router.message(CommandStart())
-async def start_handler(message: Message, settings: Settings) -> None:
+async def start_handler(
+    message: Message,
+    settings: Settings,
+    command: CommandObject | None = None,
+) -> None:
     """Handle /start command with welcome greeting and onboarding info."""
     raw_name = message.from_user.full_name if message.from_user else "студент"
     user_name = html.escape(raw_name)
-    text = (
-        f"Привет, {user_name}! 👋\n\n"
-        "Я бот платформы <b>Zeta</b> — твоего помощника по расписанию "
-        "и учебным заданиям.\n\n"
-        "Здесь ты сможешь:\n"
-        "• Узнавать актуальное расписание пар\n"
-        "• Получать и отслеживать домашние задания\n"
-        "• Авторизоваться в веб-версии через Telegram\n\n"
-        "Нажми кнопку ниже, чтобы открыть веб-кабинет, "
-        "или отправь /help для справки."
-    )
-    keyboard = build_onboarding_keyboard(settings.web_app_url)
+
+    invite_token: str | None = None
+    if command and command.args:
+        args = command.args.strip()
+        if args.startswith("invite_"):
+            invite_token = args[len("invite_") :]
+        elif args:
+            invite_token = args
+
+    if invite_token:
+        text = (
+            f"Привет, {user_name}! 👋\n\n"
+            "Ты перешёл по ссылке-приглашению в учебную группу на платформе <b>Zeta</b>.\n\n"
+            "Нажми кнопку ниже, чтобы войти в веб-кабинет и автоматически "
+            "присоединиться к своей группе!"
+        )
+    else:
+        text = (
+            f"Привет, {user_name}! 👋\n\n"
+            "Я бот платформы <b>Zeta</b> — твоего помощника по расписанию "
+            "и учебным заданиям.\n\n"
+            "Здесь ты сможешь:\n"
+            "• Узнавать актуальное расписание пар\n"
+            "• Получать и отслеживать домашние задания\n"
+            "• Авторизоваться в веб-версии через Telegram\n\n"
+            "Нажми кнопку ниже, чтобы открыть веб-кабинет, "
+            "или отправь /help для справки."
+        )
+
+    keyboard = build_onboarding_keyboard(settings.web_app_url, invite_token=invite_token)
     await message.answer(text, reply_markup=keyboard)
 
 
