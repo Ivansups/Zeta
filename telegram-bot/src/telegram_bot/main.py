@@ -69,6 +69,7 @@ async def main() -> None:
     async with BackendClient(
         base_url=settings.backend_base_url,
         timeout=settings.backend_timeout,
+        internal_secret=settings.backend_internal_secret,
     ) as backend_client:
         dp["backend_client"] = backend_client
 
