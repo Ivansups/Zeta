@@ -10,8 +10,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TouchEvent } from "react";
 
-import { lessons, weekDays } from "@/lib/mock-data";
+import { api, type ApiHomework, type ApiSchedulePair } from "@/lib/api";
+import { lessons as fallbackLessons, weekDays } from "@/lib/mock-data";
 import { getTelegramWebApp } from "@/lib/telegram-web-app";
+import type { Lesson, Subgroup } from "@/lib/types";
 
 import { LessonCard } from "./lesson-card";
 
@@ -21,6 +23,7 @@ type TelegramWebAppAuthResponse = {
   access_token: string;
   user: {
     display_name?: string | null;
+    group_id?: string | null;
   };
 };
 
@@ -47,12 +50,58 @@ const DEFAULT_DAY_INDEX = Math.max(
   weekDays.findIndex((day) => day.active),
 );
 
+function mapApiPairToLesson(pair: ApiSchedulePair, homeworks: ApiHomework[]): Lesson {
+  const matchingHw = homeworks.find(
+    (hw) =>
+      hw.schedule_pair_id === pair.id ||
+      (hw.subject?.toLowerCase() === pair.subject.toLowerCase())
+  );
+
+  const kindMap: Record<string, "Лекция" | "Практика" | "Лабораторная"> = {
+    "лек": "Лекция",
+    "прак": "Практика",
+    "лаб": "Лабораторная",
+  };
+
+  const kind = (pair.lesson_type && kindMap[pair.lesson_type.toLowerCase()]) || "Практика";
+
+  const accentMap: Record<number, "blue" | "green" | "coral" | "violet"> = {
+    1: "blue",
+    2: "green",
+    3: "coral",
+    4: "violet",
+  };
+
+  return {
+    id: pair.id,
+    date: "2026-10-15",
+    dayLabel: `${pair.day_of_week}`,
+    time: pair.start_time.slice(0, 5),
+    endTime: pair.end_time.slice(0, 5),
+    subject: pair.subject,
+    teacher: [pair.teacher_title, pair.teacher].filter(Boolean).join(" ") || "Преподаватель",
+    location: pair.room ? `ауд. ${pair.room}` : pair.is_online ? "Онлайн" : "Корпус 1",
+    kind,
+    subgroup: (pair.subgroup as Subgroup) || "all",
+    accent: accentMap[pair.pair_number] || "blue",
+    homework: matchingHw
+      ? {
+          id: matchingHw.id,
+          description: matchingHw.description,
+          dueDate: matchingHw.deadline.slice(0, 10),
+          subgroup: (matchingHw.subgroup as Subgroup) || "all",
+        }
+      : undefined,
+  };
+}
+
 export function TelegramMiniApp(): React.JSX.Element {
   const [status, setStatus] = useState<MiniAppStatus>("authenticating");
   const [userName, setUserName] = useState("Студент");
   const [errorMessage, setErrorMessage] = useState("");
   const [initData, setInitData] = useState<string | null>(null);
   const [dayIndex, setDayIndex] = useState(DEFAULT_DAY_INDEX);
+  const [realLessons, setRealLessons] = useState<Lesson[] | null>(null);
   const touchStartX = useRef<number | null>(null);
 
   const authenticate = useCallback(async (rawInitData: string): Promise<void> => {
@@ -78,6 +127,22 @@ export function TelegramMiniApp(): React.JSX.Element {
       const data = (await response.json()) as TelegramWebAppAuthResponse;
       setUserName(data.user?.display_name || "Студент");
       setStatus("ready");
+
+      try {
+        const dayName = WEEKDAY_LABELS[miniAppDays[DEFAULT_DAY_INDEX]?.weekday] || "Понедельник";
+        const [pairs, homeworks] = await Promise.all([
+          api.getDaySchedule({
+            day: dayName,
+            group_name: data.user?.group_id ? undefined : "ПИ-221",
+            group_id: data.user?.group_id || undefined,
+          }).catch(() => []),
+          api.getHomeworks({ group_id: data.user?.group_id || undefined }).catch(() => []),
+        ]);
+        if (pairs.length > 0) {
+          setRealLessons(pairs.map((p) => mapApiPairToLesson(p, homeworks)));
+        }
+      } catch {
+      }
     } catch (error: unknown) {
       setErrorMessage(
         error instanceof Error ? error.message : "Ошибка авторизации через Telegram",
@@ -128,10 +193,12 @@ export function TelegramMiniApp(): React.JSX.Element {
   }, [authenticate]);
 
   const selectedDay = miniAppDays[dayIndex];
-  const dayLessons = useMemo(
-    () => lessons.filter((lesson) => lesson.date === selectedDay.isoDate),
-    [selectedDay.isoDate],
-  );
+  const dayLessons = useMemo(() => {
+    if (realLessons && realLessons.length > 0) {
+      return realLessons;
+    }
+    return fallbackLessons.filter((lesson) => lesson.date === selectedDay.isoDate);
+  }, [realLessons, selectedDay.isoDate]);
 
   function moveDay(delta: number): void {
     setDayIndex((current) =>
@@ -261,13 +328,15 @@ export function TelegramMiniApp(): React.JSX.Element {
             </div>
           </header>
 
-          <div className="tg-lessons">
+          <div className="cards-stack">
             {dayLessons.length ? (
               dayLessons.map((lesson) => (
                 <LessonCard key={lesson.id} lesson={lesson} />
               ))
             ) : (
-              <p className="tg-empty">Пар нет — можно отдохнуть</p>
+              <div className="tg-empty-state">
+                <p>На этот день занятий не запланировано</p>
+              </div>
             )}
           </div>
         </section>

@@ -57,13 +57,18 @@ class BackendClient:
         self,
         base_url: str,
         timeout: float = 10.0,
+        internal_secret: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        """Initialize the backend client with base URL and timeout."""
+        """Initialize backend client with base URL, timeout, and secret."""
         self._base_url = base_url.rstrip("/")
+        headers = {}
+        if internal_secret:
+            headers["X-Internal-Secret"] = internal_secret
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=timeout,
+            headers=headers,
             transport=transport,
         )
 

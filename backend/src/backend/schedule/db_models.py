@@ -88,10 +88,11 @@ class SchedulePair(Base):
     __table_args__ = (
         UniqueConstraint(
             "group_id",
-            "subgroup",
             "day_of_week",
             "pair_number",
             "week_parity",
+            "subgroup",
+            "subject",
             name="uq_schedule_pair_slot",
         ),
     )

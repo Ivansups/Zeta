@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth.dependencies import get_current_user
+from backend.auth.dependencies import get_current_user, verify_internal_api_secret
 from backend.auth.models import User
 from backend.db.session import get_session
 from backend.homework.models import Homework
@@ -119,6 +119,7 @@ async def delete_homework(
 async def parse_homework_from_text(
     payload: HomeworkParseRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[None, Depends(verify_internal_api_secret)],
 ) -> HomeworkDraftResponse:
     """Parse unstructured homework text from Telegram Bot."""
     stmt = select(User).where(User.telegram_id == payload.telegram_id)
@@ -130,13 +131,14 @@ async def parse_homework_from_text(
             detail="User not registered in Zeta",
         )
     service = HomeworkService(session=session)
-    return service.parse_text_to_draft(text=payload.text, user=user)
+    return await service.parse_text_to_draft(text=payload.text, user=user)
 
 
 @router.post("/confirm-draft", response_model=ConfirmedHomeworkResponse)
 async def confirm_homework_draft(
     payload: HomeworkConfirmRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[None, Depends(verify_internal_api_secret)],
 ) -> ConfirmedHomeworkResponse:
     """Confirm and persist a parsed homework draft."""
     stmt = select(User).where(User.telegram_id == payload.telegram_id)
