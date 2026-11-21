@@ -67,7 +67,8 @@ async def db_session(
         await conn.execute(
             text(
                 "TRUNCATE TABLE audit_log, refresh_tokens, invite_tokens, "
-                "homeworks, schedule_pairs, users, groups RESTART IDENTITY CASCADE"
+                "homework_drafts, homeworks, schedule_pairs, users, groups "
+                "RESTART IDENTITY CASCADE"
             )
         )
     await engine.dispose()

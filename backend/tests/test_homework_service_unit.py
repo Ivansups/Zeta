@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.auth.models import RoleEnum, User
-from backend.homework.models import Homework
+from backend.homework.models import Homework, HomeworkDraft
 from backend.homework.schemas import HomeworkCreate, HomeworkUpdate
 from backend.homework.service import HomeworkService
 
@@ -194,3 +194,58 @@ async def test_elder_can_delete_own_group_homework() -> None:
 
     mock_session.delete.assert_awaited_once_with(hw)
     mock_session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_confirm_draft_forbidden_for_student() -> None:
+    group_id = uuid.uuid4()
+    student = _user(RoleEnum.STUDENT.value, group_id=group_id)
+
+    draft = HomeworkDraft(
+        id=uuid.uuid4(),
+        group_id=group_id,
+        created_by_id=student.id,
+        subject="Математика",
+        description="Стр 10",
+        deadline=_now() + timedelta(days=2),
+        expires_at=_now() + timedelta(minutes=15),
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = draft
+    mock_session.execute.return_value = mock_result
+
+    service = HomeworkService(session=mock_session)
+    with pytest.raises(HTTPException) as exc_info:
+        await service.confirm_draft(user=student, draft_id=str(draft.id))
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_cancel_draft_forbidden_for_other_group() -> None:
+    group_a = uuid.uuid4()
+    group_b = uuid.uuid4()
+    elder_a = _user(RoleEnum.ELDER.value, group_id=group_a)
+
+    draft = HomeworkDraft(
+        id=uuid.uuid4(),
+        group_id=group_b,
+        created_by_id=uuid.uuid4(),
+        subject="Физика",
+        description="Лаба",
+        deadline=_now() + timedelta(days=2),
+        expires_at=_now() + timedelta(minutes=15),
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = draft
+    mock_session.execute.return_value = mock_result
+
+    service = HomeworkService(session=mock_session)
+    with pytest.raises(HTTPException) as exc_info:
+        await service.cancel_draft(user=elder_a, draft_id=str(draft.id))
+
+    assert exc_info.value.status_code == 403
