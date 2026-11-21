@@ -20,6 +20,7 @@ from backend.auth.dependencies import (
     get_auth_service,
     get_current_user,
     get_settings,
+    verify_internal_api_secret,
 )
 from backend.auth.models import InviteToken, RoleEnum, User
 from backend.auth.schemas import (
@@ -53,7 +54,6 @@ def _set_auth_cookies(
     refresh_token: str,
     refresh_days: int = 30,
 ) -> None:
-    # Access token cookie: 15 минут
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -63,7 +63,6 @@ def _set_auth_cookies(
         max_age=15 * 60,
         path="/",
     )
-    # Refresh token cookie: 30 дней
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
@@ -400,6 +399,7 @@ async def revoke_invite(
 async def get_telegram_bot_user(
     payload: TelegramBotAuthRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[None, Depends(verify_internal_api_secret)],
 ) -> BotUserResponse:
     """Resolve user role and group affiliation for Telegram Bot requests."""
     stmt = select(User).where(User.telegram_id == payload.telegram_id)

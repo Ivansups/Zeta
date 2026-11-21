@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
 
+    # Internal API Secret for trusted bot-to-backend communication
+    internal_api_secret: str | None = None
+
     # LLM (OpenAI-compatible)
     llm_api_key: SecretStr | None = None
     llm_base_url: str = "https://api.openai.com/v1"
