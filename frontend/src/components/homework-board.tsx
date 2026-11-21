@@ -1,68 +1,128 @@
 "use client";
 
-import { ChevronRight, Clock3, MapPin } from "lucide-react";
+import { CalendarDays, ChevronRight, Clock3, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { api, type ApiHomework } from "@/lib/api";
-import type { Lesson, Subgroup } from "@/lib/types";
-import { addDays, currentDayName, formatDayCaption } from "@/lib/week";
+import { HomeworkDescription } from "@/components/homework-description";
+import { api, type ApiHomework, type ApiSchedulePair, type ApiUser } from "@/lib/api";
+import { formatDeadline } from "@/lib/dates";
+import {
+  buildHomeworkColumns,
+  columnKeyForDeadline,
+  type HomeworkColumnKey,
+} from "@/lib/homework-columns";
+import { lessonKindOf, lessonLocationOf } from "@/lib/schedule";
+import type { Subgroup } from "@/lib/types";
 
-type DayColumn = {
-  date: string;
-  title: string;
-  caption: string;
+function homeworksLabel(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} задание`;
+  }
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) {
+    return `${count} задания`;
+  }
+  return `${count} заданий`;
+}
+
+type BoardCard = {
+  homework: ApiHomework;
+  pair?: ApiSchedulePair;
+  accent: "blue" | "green" | "coral" | "violet";
 };
 
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+const ACCENTS = ["blue", "green", "coral", "violet"] as const;
+
+function findPair(
+  homework: ApiHomework,
+  pairs: ApiSchedulePair[],
+): ApiSchedulePair | undefined {
+  if (homework.schedule_pair_id) {
+    const byId = pairs.find((pair) => pair.id === homework.schedule_pair_id);
+    if (byId) {
+      return byId;
+    }
+  }
+  return pairs.find(
+    (pair) =>
+      pair.subject.toLowerCase() === (homework.subject ?? "").toLowerCase() &&
+      (!homework.subgroup || homework.subgroup === pair.subgroup),
+  );
 }
 
-function buildColumns(today: Date): DayColumn[] {
-  return [0, 1, 2].map((offset) => {
-    const date = addDays(today, offset);
-    const title =
-      offset === 0 ? "Сегодня" : offset === 1 ? "Завтра" : currentDayName(date);
-    return { date: isoDate(date), title, caption: formatDayCaption(date) };
-  });
-}
+function HomeworkCard({ card }: { card: BoardCard }): React.JSX.Element {
+  const { homework, pair, accent } = card;
+  const kind = lessonKindOf(pair);
+  const location = lessonLocationOf(pair);
 
-function HomeworkCard({ lesson }: { lesson: Lesson }): React.JSX.Element {
   return (
-    <article className={`homework-card accent-${lesson.accent}`}>
+    <article className={`homework-card accent-${accent}`}>
       <div className="homework-card-topline">
-        <span className="homework-kind">{lesson.kind}</span>
-        <span className="homework-date"><Clock3 size={13} strokeWidth={1.8} />{lesson.time}</span>
+        <span className="homework-kind">{kind ?? "Задание"}</span>
+        <span className="homework-date">
+          <CalendarDays size={13} strokeWidth={1.8} />
+          {formatDeadline(homework.deadline)}
+        </span>
       </div>
-      <h3>{lesson.subject}</h3>
-      <p className="homework-description">{lesson.homework?.description}</p>
-      <p className="homework-location"><MapPin size={13} strokeWidth={1.8} />{lesson.location}</p>
+      <h3>{homework.subject ?? homework.title}</h3>
+      <HomeworkDescription text={homework.description} />
+      {pair ? (
+        <p className="homework-location">
+          <span>
+            <Clock3 size={13} strokeWidth={1.8} />
+            {pair.start_time.slice(0, 5)}–{pair.end_time.slice(0, 5)}
+          </span>
+          {location ? (
+            <span>
+              <MapPin size={13} strokeWidth={1.8} />
+              {location}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
       <div className="homework-card-footer">
         <span className="homework-subgroup">
-          {lesson.subgroup === "all" ? "Вся группа" : `Подгруппа ${lesson.subgroup}`}
+          {homework.subgroup ? `Подгруппа ${homework.subgroup}` : "Вся группа"}
         </span>
-        <Link className="homework-link" href={`/?lesson=${lesson.id}`}>
-          К паре <ChevronRight size={14} strokeWidth={2} />
-        </Link>
+        {pair ? (
+          <Link className="homework-link" href={`/?lesson=${pair.id}`}>
+            К паре <ChevronRight size={14} strokeWidth={2} />
+          </Link>
+        ) : null}
       </div>
     </article>
   );
 }
 
 export function HomeworkBoard(): React.JSX.Element {
-  const [subgroup, setSubgroup] = useState<Subgroup>(1);
-  const [realHomeworks, setRealHomeworks] = useState<ApiHomework[] | null>(null);
-  const columns = useMemo(() => buildColumns(new Date()), []);
+  const [user, setUser] = useState<ApiUser | null>(null);
+  const [subgroup, setSubgroup] = useState<Subgroup | "all">(1);
+  const [homeworks, setHomeworks] = useState<ApiHomework[] | null>(null);
+  const [pairs, setPairs] = useState<ApiSchedulePair[]>([]);
+  const columns = useMemo(() => buildHomeworkColumns(new Date()), []);
 
   useEffect(() => {
     let cancelled = false;
     async function load(): Promise<void> {
-      try {
-        const list = await api.getHomeworks();
-        if (!cancelled) {
-          setRealHomeworks(list);
-        }
-      } catch {
+      const me = await api.getMe();
+      if (cancelled) {
+        return;
+      }
+      if (me) {
+        setUser(me);
+        setSubgroup(me.subgroup_number === 2 ? 2 : 1);
+      }
+      const [list, weekPairs] = await Promise.all([
+        api.getHomeworks().catch(() => [] as ApiHomework[]),
+        api.getWeekSchedule(me?.group_id ? { group_id: me.group_id } : {}).catch(
+          () => [] as ApiSchedulePair[],
+        ),
+      ]);
+      if (!cancelled) {
+        setHomeworks(list);
+        setPairs(weekPairs);
       }
     }
     void load();
@@ -71,70 +131,108 @@ export function HomeworkBoard(): React.JSX.Element {
     };
   }, []);
 
-  const homeworkLessons = useMemo(() => {
-    if (realHomeworks) {
-      return realHomeworks
-        .filter((hw) => !hw.subgroup || hw.subgroup === subgroup)
-        .map((hw, idx) => ({
-          id: hw.id,
-          date: hw.deadline.slice(0, 10),
-          dayLabel: "Срок сдачи",
-          time: hw.deadline.slice(11, 16) || "23:59",
-          endTime: "",
-          subject: hw.subject || hw.title,
-          teacher: "",
-          location: "Онлайн",
-          kind: "Практика" as const,
-          subgroup: (hw.subgroup as Subgroup) || ("all" as const),
-          accent: (["blue", "green", "coral", "violet"][idx % 4] as "blue" | "green" | "coral" | "violet"),
-          homework: {
-            id: hw.id,
-            description: hw.description,
-            dueDate: hw.deadline.slice(0, 10),
-            subgroup: (hw.subgroup as Subgroup) || "all",
-          },
-        }));
+  const cards = useMemo<BoardCard[]>(() => {
+    if (!homeworks) {
+      return [];
     }
+    return homeworks
+      .filter(
+        (hw) => subgroup === "all" || !hw.subgroup || hw.subgroup === subgroup,
+      )
+      .sort((a, b) => a.deadline.localeCompare(b.deadline))
+      .map((hw, index) => ({
+        homework: hw,
+        pair: findPair(hw, pairs),
+        accent: ACCENTS[index % ACCENTS.length],
+      }));
+  }, [homeworks, subgroup, pairs]);
 
-    return [];
-  }, [realHomeworks, subgroup]);
+  const cardsByColumn = useMemo(() => {
+    const today = new Date();
+    const grouped: Record<HomeworkColumnKey, BoardCard[]> = {
+      overdue: [],
+      today: [],
+      tomorrow: [],
+      later: [],
+    };
+    cards.forEach((card) => {
+      grouped[columnKeyForDeadline(card.homework.deadline, today)].push(card);
+    });
+    return grouped;
+  }, [cards]);
 
   return (
     <section className="homework-board" aria-label="Канбан домашних заданий">
       <div className="homework-board-toolbar">
         <div>
-          <p className="eyebrow">По датам занятий</p>
+          <p className="eyebrow">По срокам сдачи</p>
           <h2>Ближайшие задания</h2>
-          <p className="page-subtitle">Без статусов: каждое ДЗ остаётся у своей пары</p>
+          <p className="page-subtitle">
+            {user?.role === "student"
+              ? "Каждое ДЗ остаётся у своей пары"
+              : "Каждое ДЗ остаётся у своей пары, сроки не теряются"}
+          </p>
         </div>
         <div className="segmented-control" role="group" aria-label="Подгруппа">
-          <button className={subgroup === 1 ? "is-active" : ""} type="button" onClick={() => setSubgroup(1)}>Подгруппа 1</button>
-          <button className={subgroup === 2 ? "is-active" : ""} type="button" onClick={() => setSubgroup(2)}>Подгруппа 2</button>
+          <button
+            className={subgroup === "all" ? "is-active" : ""}
+            type="button"
+            onClick={() => setSubgroup("all")}
+          >
+            Все
+          </button>
+          <button
+            className={subgroup === 1 ? "is-active" : ""}
+            type="button"
+            onClick={() => setSubgroup(1)}
+          >
+            Подгруппа 1
+          </button>
+          <button
+            className={subgroup === 2 ? "is-active" : ""}
+            type="button"
+            onClick={() => setSubgroup(2)}
+          >
+            Подгруппа 2
+          </button>
         </div>
       </div>
 
       <div className="homework-board-summary">
-        <span>{homeworkLessons.length} задания</span>
+        <span>{homeworksLabel(cards.length)}</span>
         <span className="summary-dot" aria-hidden="true" />
         <span>Актуальный список</span>
       </div>
 
       <div className="kanban-grid">
         {columns.map((column) => {
-          const columnLessons = homeworkLessons.filter((lesson) => lesson.date === column.date);
+          const columnCards = cardsByColumn[column.key];
           return (
-            <section className="kanban-column" key={column.date} aria-labelledby={`day-${column.date}`}>
+            <section
+              className="kanban-column"
+              key={column.key}
+              aria-label={column.title}
+            >
               <header className="kanban-column-header">
                 <div>
-                  <h2 id={`day-${column.date}`}>{column.title}</h2>
+                  <h2>{column.title}</h2>
                   <p>{column.caption}</p>
                 </div>
-                <span className="count-badge" aria-label={`${columnLessons.length} заданий`}>{columnLessons.length}</span>
+                <span
+                  className="count-badge"
+                  aria-label={`${columnCards.length} заданий`}
+                >
+                  {columnCards.length}
+                </span>
               </header>
               <div className="kanban-card-list">
-                {columnLessons.length ? columnLessons.map((lesson) => (
-                  <HomeworkCard key={lesson.homework?.id || lesson.id} lesson={lesson} />
-                )) : <p className="kanban-empty">Заданий на этот день нет</p>}
+                {columnCards.length ? (
+                  columnCards.map((card) => (
+                    <HomeworkCard key={card.homework.id} card={card} />
+                  ))
+                ) : (
+                  <p className="kanban-empty">Заданий на этот день нет</p>
+                )}
               </div>
             </section>
           );

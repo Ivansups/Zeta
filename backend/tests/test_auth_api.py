@@ -495,3 +495,68 @@ async def test_student_cannot_change_roles(
 
     assert resp.status_code == 403
     assert elder_id is not None
+
+
+async def test_get_me_returns_group_name(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    access = await _create_elder_with_group(client, test_settings, 8401, "ZK-05")
+
+    resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {access}"})
+
+    assert resp.status_code == 200
+    assert resp.json()["group_name"] == "ZK-05"
+
+
+async def test_dev_login_is_disabled_by_default(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    test_settings.dev_login_enabled = False
+
+    resp = await client.post("/auth/dev-login")
+
+    assert resp.status_code == 403
+
+
+async def test_dev_login_issues_token_when_enabled(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    test_settings.dev_login_enabled = True
+    test_settings.dev_login_telegram_id = 8402
+
+    resp = await client.post("/auth/dev-login")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["user"]["telegram_id"] == 8402
+    assert data["user"]["role"] == "student"
+
+
+async def test_dev_login_rejected_in_production(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    test_settings.dev_login_enabled = True
+    test_settings.environment = "production"
+
+    resp = await client.post("/auth/dev-login")
+
+    assert resp.status_code == 403
+
+
+async def test_login_sets_refresh_cookie_for_the_api_proxy(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    """The web client refreshes via /api/auth/refresh, so the cookie needs Path=/."""
+    data = make_widget_auth_data(
+        telegram_id=8403, bot_token=test_settings.telegram_bot_token
+    )
+
+    resp = await client.post("/auth/telegram/widget", json=data)
+
+    assert resp.status_code == 200
+    refresh_cookie = next(
+        cookie
+        for cookie in resp.headers.get_list("set-cookie")
+        if cookie.startswith("refresh_token=")
+    )
+    assert "Path=/;" in refresh_cookie or refresh_cookie.endswith("Path=/")

@@ -15,6 +15,7 @@ class UserResponse(BaseModel):
     telegram_id: int
     role: str
     group_id: uuid.UUID | None = None
+    group_name: str | None = None
     subgroup_number: int | None = None
     display_name: str | None = None
     username: str | None = None

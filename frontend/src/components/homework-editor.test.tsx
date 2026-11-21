@@ -130,9 +130,14 @@ describe("HomeworkEditor", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("parses free text with AI into structured draft preview with auto-selected subject and date", async () => {
+  it("parses free text through the assistant and prefills subject and date", async () => {
     const user = userEvent.setup();
-    const onSave = jest.fn();
+    const onParse = jest.fn().mockResolvedValue({
+      subject: "Математический анализ",
+      description: "решить номера 12–18",
+      deadline: "2026-10-15T23:59:00Z",
+      subgroup: null,
+    });
 
     render(
       <HomeworkEditor
@@ -140,7 +145,8 @@ describe("HomeworkEditor", () => {
         lessons={testLessons}
         initialMode="assistant"
         onClose={jest.fn()}
-        onSave={onSave}
+        onSave={jest.fn()}
+        onParse={onParse}
       />,
     );
 
@@ -150,7 +156,10 @@ describe("HomeworkEditor", () => {
     );
     await user.click(screen.getByRole("button", { name: /Разобрать текст|Распознать с AI/i }));
 
-    expect(screen.getByRole("heading", { name: "Предпросмотр черновика" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Предпросмотр черновика" }),
+    ).toBeInTheDocument();
+    expect(onParse).toHaveBeenCalledWith("по матану решить номера 12–18 к четвергу");
     expect(screen.getByLabelText("Пара")).toHaveValue("math-2026-10-15");
     expect(screen.getByLabelText("Дата сдачи")).toHaveValue("2026-10-15");
     expect(screen.getByLabelText("Описание задания")).toHaveValue("решить номера 12–18");
@@ -159,6 +168,12 @@ describe("HomeworkEditor", () => {
   it("allows editing the AI-recognized draft before saving to schedule", async () => {
     const user = userEvent.setup();
     const onSave = jest.fn();
+    const onParse = jest.fn().mockResolvedValue({
+      subject: "Математический анализ",
+      description: "решить номера 12–18",
+      deadline: "2026-10-15T23:59:00Z",
+      subgroup: null,
+    });
 
     render(
       <HomeworkEditor
@@ -167,6 +182,7 @@ describe("HomeworkEditor", () => {
         initialMode="assistant"
         onClose={jest.fn()}
         onSave={onSave}
+        onParse={onParse}
       />,
     );
 
@@ -175,6 +191,7 @@ describe("HomeworkEditor", () => {
       "по матану решить номера 12–18 к четвергу",
     );
     await user.click(screen.getByRole("button", { name: /Разобрать текст|Распознать с AI/i }));
+    await screen.findByRole("heading", { name: "Предпросмотр черновика" });
 
     const descriptionInput = screen.getByLabelText("Описание задания");
     await user.clear(descriptionInput);
@@ -204,5 +221,61 @@ describe("HomeworkEditor", () => {
 
     await user.click(screen.getByRole("button", { name: "Отмена" }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("closes on Escape", async () => {
+    const user = userEvent.setup();
+    const onClose = jest.fn();
+
+    render(
+      <HomeworkEditor open lessons={testLessons} onClose={onClose} onSave={jest.fn()} />,
+    );
+
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("requires a second click to delete an existing homework", async () => {
+    const user = userEvent.setup();
+    const onDelete = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <HomeworkEditor
+        open
+        lessons={testLessons}
+        initialData={{
+          id: "hw-math",
+          lessonId: "math-2026-10-15",
+          subgroup: "all",
+          dueDate: "2026-10-15",
+          description: "Исследовать ряды на сходимость",
+        }}
+        onClose={jest.fn()}
+        onSave={jest.fn()}
+        onDelete={onDelete}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Удалить" }));
+    expect(onDelete).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Удалить безвозвратно" }));
+    expect(onDelete).toHaveBeenCalledWith("hw-math");
+  });
+
+  it("keeps the dialog open and shows the error when saving is rejected", async () => {
+    const user = userEvent.setup();
+    const onClose = jest.fn();
+    const onSave = jest.fn().mockRejectedValue(new Error("Нет прав на сохранение"));
+
+    render(
+      <HomeworkEditor open lessons={testLessons} onClose={onClose} onSave={onSave} />,
+    );
+
+    await user.type(screen.getByLabelText("Описание задания"), "Черновик задания");
+    await user.click(screen.getByRole("button", { name: "Сохранить ДЗ" }));
+
+    expect(await screen.findByText("Нет прав на сохранение")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

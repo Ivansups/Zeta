@@ -53,6 +53,21 @@ class HomeworkParseRequest(BaseModel):
     text: str
 
 
+class HomeworkParsePreviewRequest(BaseModel):
+    """Free-form text submitted from the web editor for parsing."""
+
+    text: str = Field(..., min_length=1)
+
+
+class HomeworkParsePreview(BaseModel):
+    """Parsed homework fields shown to the user before saving."""
+
+    subject: str
+    description: str
+    deadline: datetime | None = None
+    subgroup: int | None = None
+
+
 class HomeworkDraftResponse(BaseModel):
     draft_id: str
     subject: str

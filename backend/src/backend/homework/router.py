@@ -19,6 +19,8 @@ from backend.homework.schemas import (
     HomeworkConfirmRequest,
     HomeworkCreate,
     HomeworkDraftResponse,
+    HomeworkParsePreview,
+    HomeworkParsePreviewRequest,
     HomeworkParseRequest,
     HomeworkRead,
     HomeworkUpdate,
@@ -77,6 +79,18 @@ async def list_homeworks(
         date_to=date_to,
     )
     return [_map_homework_to_read(hw) for hw in items]
+
+
+@router.post("/parse", response_model=HomeworkParsePreview)
+async def parse_homework_for_web(
+    payload: HomeworkParsePreviewRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HomeworkParsePreview:
+    """Parse free-form text for the web editor without persisting a draft."""
+    service = HomeworkService(session=session)
+    service.require_manager_group(current_user)
+    return service.parse_preview(payload.text)
 
 
 @router.get("/{homework_id}", response_model=HomeworkRead)

@@ -46,4 +46,13 @@ describe("proxy", () => {
 
     expect(response.headers.get("location")).toBeNull();
   });
+
+  it("lets the page render when only the refresh token is left", () => {
+    const request = new NextRequest(new URL("http://localhost/"));
+    request.cookies.set("refresh_token", "refresh");
+
+    const response = proxy(request);
+
+    expect(response.headers.get("location")).toBeNull();
+  });
 });

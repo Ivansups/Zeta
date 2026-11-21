@@ -30,9 +30,12 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-zeta}:${POSTGRES_PASSWORD:-zeta}@db:5432/${POSTGRES_DB:-zeta}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-mock-bot-token}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-zeta-dev-secret-key-change-in-production-must-be-long-enough}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-}
+      - ALLOWED_TELEGRAM_USERS=${ALLOWED_TELEGRAM_USERS:-}
+      - DEV_LOGIN_ENABLED=${DEV_LOGIN_ENABLED:-false}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}

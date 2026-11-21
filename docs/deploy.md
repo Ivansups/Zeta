@@ -45,6 +45,7 @@ TELEGRAM_BOT_TOKEN=<токен из BotFather>
 JWT_SECRET_KEY=<64 hex-символа>
 INTERNAL_API_SECRET=<64 hex-символа>
 ALLOWED_TELEGRAM_USERS=<id или @username через пробел>
+DEV_LOGIN_ENABLED=false          # true только для локальной отладки
 LLM_API_KEY=<ключ OpenAI-совместимого API>   # без него /llm/ask не работает
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4o-mini

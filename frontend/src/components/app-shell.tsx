@@ -54,10 +54,16 @@ function initialsOf(name: string): string {
 
 export function toShellUser(user: ApiUser): ShellUser {
   const name = user.display_name || user.username || "Пользователь";
+  const group = [
+    user.group_name,
+    user.subgroup_number ? `Подгруппа ${user.subgroup_number}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return {
     name,
     role: ROLE_LABELS[user.role] ?? user.role,
-    group: user.subgroup_number ? `Подгруппа ${user.subgroup_number}` : "",
+    group,
     initials: initialsOf(name),
   };
 }

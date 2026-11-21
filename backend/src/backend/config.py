@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Allowed Telegram users/IDs for closed beta testing (comma or space separated)
     allowed_telegram_users: str | None = None
 
+    # Development-only login without Telegram; always refused in production
+    dev_login_enabled: bool = False
+    dev_login_telegram_id: int = 156587029
+
     # LLM (OpenAI-compatible)
     llm_api_key: SecretStr | None = None
     llm_base_url: str = "https://api.openai.com/v1"

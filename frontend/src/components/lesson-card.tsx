@@ -1,20 +1,29 @@
 import { BookOpen, GraduationCap, MapPin, Plus } from "lucide-react";
 
+import { HomeworkDescription } from "@/components/homework-description";
 import type { Lesson } from "@/lib/types";
 
 export type LessonCardProps = {
   lesson: Lesson;
+  focused?: boolean;
+  canManage?: boolean;
   onAddHomework?: (lesson: Lesson) => void;
   onEditHomework?: (lesson: Lesson) => void;
 };
 
 export function LessonCard({
   lesson,
+  focused = false,
+  canManage = false,
   onAddHomework,
   onEditHomework,
 }: LessonCardProps): React.JSX.Element {
   return (
-    <article className={`lesson-card accent-${lesson.accent}`}>
+    <article
+      className={`lesson-card accent-${lesson.accent}${focused ? " is-focused" : ""}`}
+      id={`lesson-${lesson.id}`}
+      data-focused={focused ? "true" : undefined}
+    >
       <div className="lesson-time">
         <strong>{lesson.time}</strong>
         <span>{lesson.endTime}</span>
@@ -47,24 +56,24 @@ export function LessonCard({
             <div className="homework-inline-body">
               <div className="homework-inline-header">
                 <strong>Домашнее задание</strong>
-                {onEditHomework ? (
+                {canManage && onEditHomework ? (
                   <button
                     className="homework-edit-btn"
                     type="button"
                     onClick={() => onEditHomework(lesson)}
-                    aria-label={`Редактировать задание для ${lesson.subject}`}
+                    aria-label={`Изменить задание для ${lesson.subject}`}
                   >
                     Изменить
                   </button>
                 ) : null}
               </div>
-              <p>{lesson.homework.description}</p>
+              <HomeworkDescription text={lesson.homework.description} />
             </div>
           </div>
         ) : (
           <div className="lesson-homework-empty">
             <p className="no-homework">Домашнего задания пока нет</p>
-            {onAddHomework ? (
+            {canManage && onAddHomework ? (
               <button
                 className="lesson-add-hw-btn"
                 type="button"

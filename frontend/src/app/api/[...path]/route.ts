@@ -3,6 +3,7 @@ type RouteContext = {
 };
 
 const ORIGIN_HEADERS = ["connection", "content-length", "host", "transfer-encoding"];
+const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
 
 function getBackendOrigin(): string {
   const apiUrl = process.env.API_URL;
@@ -18,11 +19,22 @@ async function proxyRequest(request: Request, context: RouteContext): Promise<Re
   const incomingUrl = new URL(request.url);
   const pathname = path.map((segment) => encodeURIComponent(segment)).join("/");
   const targetUrl = new URL(`/${pathname}${incomingUrl.search}`, `${getBackendOrigin()}/`);
-  const forwardedRequest = new Request(targetUrl, request);
 
+  const method = request.method;
+  const headers = new Headers(request.headers);
   for (const header of ORIGIN_HEADERS) {
-    forwardedRequest.headers.delete(header);
+    headers.delete(header);
   }
+
+  // Buffer the body explicitly: cloning an incoming request with an empty
+  // stream fails on some Node versions ("expected non-null body source").
+  const buffer = BODYLESS_METHODS.has(method) ? undefined : await request.arrayBuffer();
+  const forwardedRequest = new Request(targetUrl, {
+    method,
+    headers,
+    body: buffer && buffer.byteLength > 0 ? buffer : undefined,
+    redirect: "manual",
+  });
 
   return fetch(forwardedRequest);
 }
