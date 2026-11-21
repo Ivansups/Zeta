@@ -1,9 +1,7 @@
 """Service for homework CRUD operations with role-based access control."""
 
-import re
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any, ClassVar
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -11,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.auth.models import RoleEnum, User
-from backend.homework.models import Homework
+from backend.homework.models import Homework, HomeworkDraft
+from backend.homework.parsers.text_parser import (
+    clean_homework_description,
+    extract_deadline,
+    extract_subgroup,
+    extract_subject,
+)
 from backend.homework.schemas import (
     ConfirmedHomeworkResponse,
     HomeworkCreate,
@@ -50,10 +54,9 @@ class HomeworkService:
         if not self._is_privileged_for_group(user, target_group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only elder, helper or admin may create homework for this group",
+                detail="Only elder, helper or admin may create homework",
             )
 
-        subject = data.subject
         if data.schedule_pair_id:
             stmt = select(SchedulePair).where(SchedulePair.id == data.schedule_pair_id)
             res = await self.session.execute(stmt)
@@ -66,10 +69,8 @@ class HomeworkService:
             if pair.group_id != target_group_id:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Schedule pair does not belong to the selected group",
+                    detail="Schedule pair belongs to another group",
                 )
-            if not subject:
-                subject = pair.subject
 
         hw = Homework(
             group_id=target_group_id,
@@ -77,7 +78,7 @@ class HomeworkService:
             subgroup=data.subgroup,
             title=data.title.strip(),
             description=data.description.strip(),
-            subject=subject,
+            subject=data.subject.strip() if data.subject else None,
             deadline=data.deadline,
             created_by_id=user.id,
         )
@@ -94,59 +95,49 @@ class HomeworkService:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[Homework]:
-        """Fetch list of homework assignments with access control."""
-        stmt = select(Homework).options(selectinload(Homework.group))
+        """Query homeworks filtered by group and user role.
 
-        if user.role == RoleEnum.STUDENT.value:
+        Students only see their own group. Admin sees everything if group_id is not specified.
+        """
+        stmt = (
+            select(Homework)
+            .options(selectinload(Homework.group))
+            .order_by(Homework.deadline.asc())
+        )
+
+        effective_group_id = group_id or user.group_id
+        if user.role != RoleEnum.ADMIN.value:
             if not user.group_id:
                 return []
             if group_id and group_id != user.group_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Students can only view homework for their own group",
+                    detail="Cannot view homework for another group",
                 )
-            target_group_id: uuid.UUID = user.group_id
-            stmt = stmt.where(Homework.group_id == target_group_id)
+            effective_group_id = user.group_id
 
-            target_subgroup = subgroup if subgroup is not None else user.subgroup_number
-            if target_subgroup is not None:
-                stmt = stmt.where(
-                    (Homework.subgroup.is_(None))
-                    | (Homework.subgroup == target_subgroup)
-                )
-        elif user.role in (RoleEnum.ELDER.value, RoleEnum.HELPER.value):
-            elder_group_id = group_id or user.group_id
-            if elder_group_id and elder_group_id != user.group_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Elders and helpers can only view their own group",
-                )
-            if elder_group_id:
-                stmt = stmt.where(Homework.group_id == elder_group_id)
-            if subgroup is not None:
-                stmt = stmt.where(
-                    (Homework.subgroup.is_(None)) | (Homework.subgroup == subgroup)
-                )
-        else:
-            # Admin or curator
-            if group_id:
-                stmt = stmt.where(Homework.group_id == group_id)
-            if subgroup is not None:
-                stmt = stmt.where(
-                    (Homework.subgroup.is_(None)) | (Homework.subgroup == subgroup)
-                )
+        if effective_group_id:
+            stmt = stmt.where(Homework.group_id == effective_group_id)
+
+        effective_subgroup = subgroup
+        if user.role == RoleEnum.STUDENT.value and user.subgroup_number:
+            effective_subgroup = user.subgroup_number
+
+        if effective_subgroup is not None:
+            stmt = stmt.where(
+                (Homework.subgroup.is_(None)) | (Homework.subgroup == effective_subgroup)
+            )
 
         if date_from:
             stmt = stmt.where(Homework.deadline >= date_from)
         if date_to:
             stmt = stmt.where(Homework.deadline <= date_to)
 
-        stmt = stmt.order_by(Homework.deadline.asc(), Homework.title.asc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def get_homework_by_id(self, user: User, homework_id: uuid.UUID) -> Homework:
-        """Fetch single homework assignment by ID with access control."""
+        """Fetch single homework assignment by ID."""
         stmt = (
             select(Homework)
             .options(selectinload(Homework.group))
@@ -157,13 +148,13 @@ class HomeworkService:
         if not hw:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Homework not found",
+                detail="Homework assignment not found",
             )
 
         if user.role != RoleEnum.ADMIN.value and user.group_id != hw.group_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access forbidden: homework belongs to another group",
+                detail="Access denied to homework of another group",
             )
 
         return hw
@@ -224,10 +215,10 @@ class HomeworkService:
         await self.session.delete(hw)
         await self.session.commit()
 
-    _DRAFT_CACHE: ClassVar[dict[str, dict[str, Any]]] = {}
-
-    def parse_text_to_draft(self, text: str, user: User) -> HomeworkDraftResponse:
-        """Parse unstructured homework text into structured draft."""
+    async def parse_text_to_draft(
+        self, text: str, user: User, ttl_seconds: int = 900
+    ) -> HomeworkDraftResponse:
+        """Parse unstructured homework text into structured draft persisted in Postgres."""
         if not user.group_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -240,99 +231,29 @@ class HomeworkService:
             )
 
         norm = text.lower()
-        subject_aliases = [
-            (["матан", "математик", "матанализ"], "Математический анализ"),
-            (["питон", "python", "пайтон"], "Программирование на Python"),
-            (["алгоритм", "структур", "аисд"], "Алгоритмы и структуры данных"),
-            (["англ", "english", "инглиш"], "Английский язык"),
-            (["дискрет", "кнф", "днф"], "Дискретная математика"),
-            (["истор"], "История России"),
-        ]
-
-        subject = "Домашнее задание"
-        for keywords, alias in subject_aliases:
-            if any(kw in norm for kw in keywords):
-                subject = alias
-                break
-
-        subgroup: int | None = None
-        if re.search(
-            r"(\b1\s*подгрупп|подгрупп[а-я]*\s*1|перв[а-я]*\s*подгрупп)", norm
-        ):
-            subgroup = 1
-        elif re.search(
-            r"(\b2\s*подгрупп|подгрупп[а-я]*\s*2|втор[а-я]*\s*подгрупп)", norm
-        ):
-            subgroup = 2
+        subject = extract_subject(norm)
+        subgroup = extract_subgroup(norm)
+        deadline = extract_deadline(norm)
+        cleaned = clean_homework_description(text)
 
         now = datetime.now(UTC)
-        deadline: datetime = (now + timedelta(days=1)).replace(
-            hour=23, minute=59, second=0, microsecond=0
+        expires_at = now + timedelta(seconds=ttl_seconds)
+
+        draft = HomeworkDraft(
+            group_id=user.group_id,
+            created_by_id=user.id,
+            subject=subject,
+            description=cleaned,
+            subgroup=subgroup,
+            deadline=deadline,
+            expires_at=expires_at,
         )
-
-        weekday_map = {
-            "понедельник": 0,
-            "пн": 0,
-            "вторник": 1,
-            "вт": 1,
-            "среда": 2,
-            "среду": 2,
-            "ср": 2,
-            "четверг": 3,
-            "четвергу": 3,
-            "чт": 3,
-            "пятниц": 4,
-            "пятнице": 4,
-            "пт": 4,
-            "суббот": 5,
-            "субботе": 5,
-            "сб": 5,
-            "воскресень": 6,
-            "вс": 6,
-        }
-
-        for w_name, w_idx in weekday_map.items():
-            if w_name in norm:
-                diff = (w_idx - now.weekday()) % 7
-                if diff == 0:
-                    diff = 7
-                deadline = (now + timedelta(days=diff)).replace(
-                    hour=23, minute=59, second=0, microsecond=0
-                )
-                break
-
-        cleaned = re.sub(r"(?i)^дз[:\s]*", "", text).strip()
-        cleaned = re.sub(
-            r"(?i)(?:для\s*)?(?:[12]\s*подгрупп[а-я]*|вся\s*группа|для\s*всех)",
-            "",
-            cleaned,
-        ).strip()
-        cleaned = re.sub(
-            r"(?i)(?:по\s*)?(?:матану?|математике?|питону?|python|алгоритмам?|аисд|английскому?|english|дискретке?|истории?)",
-            "",
-            cleaned,
-        ).strip()
-        cleaned = re.sub(
-            r"(?i)(?:к|на)\s*(?:четвергу?|пятнице?|субботе?|понедельнику?|вторнику?|среде?|завтра|сегодня)",
-            "",
-            cleaned,
-        ).strip(" ,.:;-")
-
-        if len(cleaned) < 3:
-            cleaned = text.strip()
-
-        draft_id = str(uuid.uuid4())
-        self._DRAFT_CACHE[draft_id] = {
-            "subject": subject,
-            "description": cleaned,
-            "deadline": deadline,
-            "subgroup": subgroup,
-            "group_id": user.group_id,
-            "created_by_id": user.id,
-        }
+        self.session.add(draft)
+        await self.session.commit()
+        await self.session.refresh(draft)
 
         return HomeworkDraftResponse(
-            draft_id=draft_id,
+            draft_id=str(draft.id),
             subject=subject,
             description=cleaned,
             deadline=deadline,
@@ -342,24 +263,40 @@ class HomeworkService:
     async def confirm_draft(
         self, user: User, draft_id: str
     ) -> ConfirmedHomeworkResponse:
-        """Confirm and persist a draft to the database."""
-        draft = self._DRAFT_CACHE.pop(draft_id, None)
-        if not draft:
+        """Confirm and persist a draft from database to homeworks table."""
+        try:
+            draft_uuid = uuid.UUID(draft_id)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Draft not found or expired",
+            ) from err
+
+        stmt = select(HomeworkDraft).where(HomeworkDraft.id == draft_uuid)
+        res = await self.session.execute(stmt)
+        draft = res.scalar_one_or_none()
+
+        now = datetime.now(UTC)
+        if not draft or draft.expires_at < now:
+            if draft:
+                await self.session.delete(draft)
+                await self.session.commit()
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Draft not found or expired",
             )
 
         hw = Homework(
-            group_id=draft["group_id"],
-            title=draft["subject"],
-            description=draft["description"],
-            subject=draft["subject"],
-            deadline=draft["deadline"],
-            subgroup=draft["subgroup"],
+            group_id=draft.group_id,
+            title=draft.subject,
+            description=draft.description,
+            subject=draft.subject,
+            deadline=draft.deadline,
+            subgroup=draft.subgroup,
             created_by_id=user.id,
         )
         self.session.add(hw)
+        await self.session.delete(draft)
         await self.session.commit()
         await self.session.refresh(hw)
 
