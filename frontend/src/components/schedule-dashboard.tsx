@@ -1,9 +1,12 @@
 "use client";
 
 import { BookOpen, ChevronRight, Plus, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, type ApiHomework, type ApiSchedulePair } from "@/lib/api";
+import { deadlineDate, deadlineToIso, formatDeadline, localIsoDate } from "@/lib/dates";
+import { canManageHomework } from "@/lib/permissions";
+import { lessonKindOf, lessonLocationOf, pairMatchesParity, type WeekParityFilter } from "@/lib/schedule";
 import type { HomeworkDraft, Lesson, Subgroup } from "@/lib/types";
 import {
   WEEK_DAYS,
@@ -19,9 +22,7 @@ import { LessonCard } from "./lesson-card";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
+const ACCENTS = ["blue", "green", "coral", "violet"] as const;
 
 function weekdayDate(dayName: string, reference: Date): Date {
   const targetIndex = WEEK_DAYS.indexOf(dayName as (typeof WEEK_DAYS)[number]);
@@ -32,45 +33,57 @@ function weekdayDate(dayName: string, reference: Date): Date {
   return addDays(monday, targetIndex);
 }
 
-const KIND_MAP: Record<string, "Лекция" | "Практика" | "Лабораторная"> = {
-  лек: "Лекция",
-  прак: "Практика",
-  лаб: "Лабораторная",
-};
+function pairsLabel(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} пара`;
+  }
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) {
+    return `${count} пары`;
+  }
+  return `${count} пар`;
+}
 
-const ACCENTS = ["blue", "green", "coral", "violet"] as const;
+function matchingHomework(
+  pair: ApiSchedulePair,
+  homeworks: ApiHomework[],
+): ApiHomework | undefined {
+  return homeworks
+    .filter(
+      (hw) =>
+        hw.schedule_pair_id === pair.id ||
+        (hw.subject?.toLowerCase() === pair.subject.toLowerCase() &&
+          (!hw.subgroup || hw.subgroup === pair.subgroup)),
+    )
+    .sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
+}
 
 function mapApiPairToLesson(
   pair: ApiSchedulePair,
   homeworks: ApiHomework[],
   reference: Date,
 ): Lesson {
-  const matchingHw = homeworks.find(
-    (hw) =>
-      hw.schedule_pair_id === pair.id ||
-      (hw.subject?.toLowerCase() === pair.subject.toLowerCase() &&
-        (!hw.subgroup || hw.subgroup === pair.subgroup)),
-  );
+  const matchingHw = matchingHomework(pair, homeworks);
   const date = weekdayDate(pair.day_of_week, reference);
-  const kind = (pair.lesson_type && KIND_MAP[pair.lesson_type.toLowerCase()]) || "Практика";
 
   return {
     id: pair.id,
-    date: isoDate(date),
+    date: localIsoDate(date),
     dayLabel: pair.day_of_week,
     time: pair.start_time.slice(0, 5),
     endTime: pair.end_time.slice(0, 5),
     subject: pair.subject,
     teacher: [pair.teacher_title, pair.teacher].filter(Boolean).join(" ") || "—",
-    location: pair.room ? `ауд. ${pair.room}` : pair.is_online ? "Онлайн" : "—",
-    kind,
+    location: lessonLocationOf(pair) ?? "—",
+    kind: lessonKindOf(pair) ?? "Практика",
     subgroup: (pair.subgroup as Subgroup) || "all",
     accent: ACCENTS[(pair.pair_number - 1) % ACCENTS.length],
     homework: matchingHw
       ? {
           id: matchingHw.id,
           description: matchingHw.description,
-          dueDate: matchingHw.deadline.slice(0, 10),
+          dueDate: deadlineDate(matchingHw.deadline),
           subgroup: (matchingHw.subgroup as Subgroup) || "all",
         }
       : undefined,
@@ -79,13 +92,16 @@ function mapApiPairToLesson(
 
 export function ScheduleDashboard(): React.JSX.Element {
   const today = useMemo(() => new Date(), []);
-  const [subgroup, setSubgroup] = useState<Subgroup>(1);
+  const [selectedDay, setSelectedDay] = useState<string>(currentDayName(today));
+  const [parity, setParity] = useState<WeekParityFilter>("all");
+  const [subgroup, setSubgroup] = useState<Subgroup | "all">(1);
   const [view, setView] = useState<"day" | "week">("day");
-  const [lessonList, setLessonList] = useState<Lesson[]>([]);
-  const [weekLessons, setWeekLessons] = useState<Lesson[]>([]);
+  const [weekPairs, setWeekPairs] = useState<ApiSchedulePair[]>([]);
   const [homeworks, setHomeworks] = useState<ApiHomework[]>([]);
   const [groupName, setGroupName] = useState<string>("");
+  const [canManage, setCanManage] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [editorState, setEditorState] = useState<{
     open: boolean;
     mode?: "form" | "assistant";
@@ -107,15 +123,15 @@ export function ScheduleDashboard(): React.JSX.Element {
       if (cancelled) {
         return;
       }
+      if (!user) {
+        return;
+      }
 
-      const scope = {
-        group_id: user?.group_id || undefined,
-        subgroup: user?.subgroup_number || undefined,
-      };
-      const [dayPairs, weekPairs, homeworkList] = await Promise.all([
-        api
-          .getDaySchedule({ day: currentDayName(new Date()), ...scope })
-          .catch(() => []),
+      const scope = { group_id: user.group_id || undefined };
+      setCanManage(canManageHomework(user));
+      setSubgroup(user.subgroup_number === 2 ? 2 : 1);
+
+      const [weekPairs_, homeworkList] = await Promise.all([
         api.getWeekSchedule(scope).catch(() => []),
         api.getHomeworks({ group_id: scope.group_id }).catch(() => []),
       ]);
@@ -123,12 +139,19 @@ export function ScheduleDashboard(): React.JSX.Element {
         return;
       }
 
-      const reference = new Date();
-      setLessonList(dayPairs.map((pair) => mapApiPairToLesson(pair, homeworkList, reference)));
-      setWeekLessons(weekPairs.map((pair) => mapApiPairToLesson(pair, homeworkList, reference)));
+      setWeekPairs(weekPairs_);
       setHomeworks(homeworkList);
-      setGroupName(dayPairs[0]?.group_name ?? weekPairs[0]?.group_name ?? "");
+      setGroupName(weekPairs_[0]?.group_name ?? "");
       setLoaded(true);
+
+      const requestedLesson = new URLSearchParams(window.location.search).get("lesson");
+      if (requestedLesson) {
+        const pair = weekPairs_.find((item) => item.id === requestedLesson);
+        if (pair) {
+          setSelectedDay(pair.day_of_week);
+        }
+        setFocusedId(requestedLesson);
+      }
     }
 
     void loadData();
@@ -136,6 +159,15 @@ export function ScheduleDashboard(): React.JSX.Element {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!focusedId) {
+      return;
+    }
+    document
+      .getElementById(`lesson-${focusedId}`)
+      ?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }, [focusedId, selectedDay, loaded]);
 
   useEffect(() => {
     if (savedMessage) {
@@ -146,21 +178,42 @@ export function ScheduleDashboard(): React.JSX.Element {
     }
   }, [savedMessage]);
 
-  const visibleLessons = useMemo(
+  const visibleHomeworks = useMemo(
     () =>
-      lessonList.filter(
-        (lesson) => lesson.subgroup === "all" || lesson.subgroup === subgroup,
+      homeworks.filter(
+        (hw) => subgroup === "all" || !hw.subgroup || hw.subgroup === subgroup,
       ),
-    [lessonList, subgroup],
+    [homeworks, subgroup],
+  );
+
+  const lessonsForDay = useCallback(
+    (dayName: string): Lesson[] =>
+      weekPairs
+        .filter(
+          (pair) =>
+            pair.day_of_week === dayName && pairMatchesParity(pair, parity),
+        )
+        .map((pair) => mapApiPairToLesson(pair, visibleHomeworks, today))
+        .filter(
+          (lesson) =>
+            lesson.subgroup === "all" ||
+            subgroup === "all" ||
+            lesson.subgroup === subgroup,
+        ),
+    [weekPairs, parity, visibleHomeworks, subgroup, today],
+  );
+
+  const dayLessons = useMemo(
+    () => lessonsForDay(selectedDay),
+    [lessonsForDay, selectedDay],
   );
 
   const upcomingHomeworks = useMemo(
     () =>
-      [...homeworks]
+      [...visibleHomeworks]
         .sort((a, b) => a.deadline.localeCompare(b.deadline))
-        .filter((homework) => !homework.subgroup || homework.subgroup === subgroup)
         .slice(0, 3),
-    [homeworks, subgroup],
+    [visibleHomeworks],
   );
 
   const weekStrip = useMemo(() => {
@@ -172,16 +225,13 @@ export function ScheduleDashboard(): React.JSX.Element {
         date,
         label: shortDayName(date),
         dayNumber: date.getDate(),
-        isToday: isoDate(date) === isoDate(today),
-        hasHomework: weekLessons.some(
-          (lesson) =>
-            lesson.dayLabel === dayName &&
-            Boolean(lesson.homework) &&
-            (lesson.subgroup === "all" || lesson.subgroup === subgroup),
-        ),
+        isToday: localIsoDate(date) === localIsoDate(today),
+        hasHomework: lessonsForDay(dayName).some((lesson) => Boolean(lesson.homework)),
       };
     });
-  }, [today, weekLessons, subgroup]);
+  }, [today, lessonsForDay]);
+
+  const selectedDate = weekdayDate(selectedDay, today);
 
   function handleAddHomework(lesson: Lesson): void {
     setEditorState({
@@ -213,49 +263,57 @@ export function ScheduleDashboard(): React.JSX.Element {
     });
   }
 
-  function handleSave(draft: HomeworkDraft): void {
-    const isEdit = Boolean(draft.id);
+  async function handleSave(draft: HomeworkDraft): Promise<void> {
+    const lesson = weekPairs.find((pair) => pair.id === draft.lessonId);
+    const subject = draft.subject || lesson?.subject || "Домашнее задание";
+    const payload = {
+      title: subject,
+      description: draft.description,
+      subject,
+      deadline: deadlineToIso(draft.dueDate),
+      subgroup: draft.subgroup === "all" ? null : draft.subgroup,
+      schedule_pair_id: UUID_PATTERN.test(draft.lessonId) ? draft.lessonId : undefined,
+    };
 
-    setLessonList((prevLessons) =>
-      prevLessons.map((item) =>
-        item.id === draft.lessonId
-          ? {
-              ...item,
-              homework: {
-                id: draft.id || item.homework?.id || `hw-${draft.lessonId}`,
+    if (draft.id) {
+      await api.updateHomework(draft.id, payload);
+      setHomeworks((prev) =>
+        prev.map((item) =>
+          item.id === draft.id
+            ? {
+                ...item,
+                title: subject,
                 description: draft.description,
-                dueDate: draft.dueDate,
-                subgroup: draft.subgroup,
-              },
-            }
-          : item,
-      ),
-    );
+                subject,
+                deadline: payload.deadline,
+                subgroup: payload.subgroup,
+              }
+            : item,
+        ),
+      );
+      setSavedMessage(`Задание для «${subject}» обновлено`);
+      return;
+    }
 
-    const lesson = lessonList.find((item) => item.id === draft.lessonId);
-    setEditorState({ open: false, mode: "form", initialData: null });
-
-    const deadlineIso = draft.dueDate
-      ? `${draft.dueDate}T23:59:00Z`
-      : new Date().toISOString();
-    void api
-      .createHomework({
-        title: draft.subject || lesson?.subject || "Домашнее задание",
+    const saved = await api.createHomework(payload);
+    setHomeworks((prev) => [
+      ...prev,
+      {
+        ...saved,
         description: draft.description,
-        subject: draft.subject || lesson?.subject,
-        deadline: deadlineIso,
-        subgroup: draft.subgroup === "all" ? undefined : (draft.subgroup as number),
-        schedule_pair_id: UUID_PATTERN.test(draft.lessonId) ? draft.lessonId : undefined,
-      })
-      .catch(() => {
-        setSavedMessage("Не удалось сохранить задание. Попробуй позже.");
-      });
+        subject,
+        deadline: payload.deadline,
+        subgroup: payload.subgroup,
+        schedule_pair_id: saved.schedule_pair_id ?? payload.schedule_pair_id ?? null,
+      },
+    ]);
+    setSavedMessage(`Задание для «${subject}» сохранено`);
+  }
 
-    setSavedMessage(
-      isEdit
-        ? `Задание для «${lesson?.subject ?? "пары"}» обновлено`
-        : `Задание для «${lesson?.subject ?? "пары"}» сохранено`,
-    );
+  async function handleDelete(homeworkId: string): Promise<void> {
+    await api.deleteHomework(homeworkId);
+    setHomeworks((prev) => prev.filter((item) => item.id !== homeworkId));
+    setSavedMessage("Задание удалено");
   }
 
   return (
@@ -272,28 +330,30 @@ export function ScheduleDashboard(): React.JSX.Element {
               .join(" · ")}
           </p>
         </div>
-        <div className="header-actions">
-          <button
-            className="button button-secondary assistant-button"
-            type="button"
-            onClick={() =>
-              setEditorState({ open: true, mode: "assistant", initialData: null })
-            }
-          >
-            <Sparkles size={16} strokeWidth={1.8} />
-            Zeta AI
-          </button>
-          <button
-            className="button button-primary"
-            type="button"
-            onClick={() =>
-              setEditorState({ open: true, mode: "form", initialData: null })
-            }
-          >
-            <Plus size={16} strokeWidth={2} />
-            Добавить ДЗ
-          </button>
-        </div>
+        {canManage ? (
+          <div className="header-actions">
+            <button
+              className="button button-secondary assistant-button"
+              type="button"
+              onClick={() =>
+                setEditorState({ open: true, mode: "assistant", initialData: null })
+              }
+            >
+              <Sparkles size={16} strokeWidth={1.8} />
+              Zeta AI
+            </button>
+            <button
+              className="button button-primary"
+              type="button"
+              onClick={() =>
+                setEditorState({ open: true, mode: "form", initialData: null })
+              }
+            >
+              <Plus size={16} strokeWidth={2} />
+              Добавить ДЗ
+            </button>
+          </div>
+        ) : null}
       </header>
 
       <section className="schedule-toolbar" aria-label="Параметры расписания">
@@ -314,7 +374,38 @@ export function ScheduleDashboard(): React.JSX.Element {
           </button>
         </div>
 
+        <div className="segmented-control" role="group" aria-label="Неделя">
+          <button
+            className={parity === "all" ? "is-active" : ""}
+            type="button"
+            onClick={() => setParity("all")}
+          >
+            Все
+          </button>
+          <button
+            className={parity === "numerator" ? "is-active" : ""}
+            type="button"
+            onClick={() => setParity("numerator")}
+          >
+            Числитель
+          </button>
+          <button
+            className={parity === "denominator" ? "is-active" : ""}
+            type="button"
+            onClick={() => setParity("denominator")}
+          >
+            Знаменатель
+          </button>
+        </div>
+
         <div className="segmented-control" role="group" aria-label="Подгруппа">
+          <button
+            className={subgroup === "all" ? "is-active" : ""}
+            type="button"
+            onClick={() => setSubgroup("all")}
+          >
+            Все
+          </button>
           <button
             className={subgroup === 1 ? "is-active" : ""}
             type="button"
@@ -337,7 +428,14 @@ export function ScheduleDashboard(): React.JSX.Element {
         aria-label={`Неделя ${weekStrip[0]?.dayNumber}–${weekStrip[6]?.dayNumber}`}
       >
         {weekStrip.map((day) => (
-          <button className={day.isToday ? "is-active" : ""} type="button" key={day.date.toISOString()}>
+          <button
+            className={day.dayName === selectedDay ? "is-active" : ""}
+            type="button"
+            key={day.date.toISOString()}
+            onClick={() => setSelectedDay(day.dayName)}
+            aria-label={`${day.dayName} ${day.dayNumber}`}
+            aria-pressed={day.dayName === selectedDay}
+          >
             <span>{day.label}</span>
             <strong>{day.dayNumber}</strong>
             {day.hasHomework ? <i aria-label="Есть домашнее задание" /> : null}
@@ -351,21 +449,23 @@ export function ScheduleDashboard(): React.JSX.Element {
             <div className="section-heading">
               <div>
                 <h2>
-                  {currentDayName(today)}, {formatDayCaption(today)}
+                  {selectedDay}, {formatDayCaption(selectedDate)}
                 </h2>
-                <p>{visibleLessons.length} пары в расписании</p>
+                <p>{pairsLabel(dayLessons.length)} в расписании</p>
               </div>
             </div>
 
             {!loaded ? (
               <p className="kanban-empty">Загружаем расписание…</p>
-            ) : visibleLessons.length === 0 ? (
+            ) : dayLessons.length === 0 ? (
               <p className="kanban-empty">На этот день пар нет</p>
             ) : (
-              visibleLessons.map((lesson) => (
+              dayLessons.map((lesson) => (
                 <LessonCard
                   key={lesson.id}
                   lesson={lesson}
+                  focused={lesson.id === focusedId}
+                  canManage={canManage}
                   onAddHomework={handleAddHomework}
                   onEditHomework={handleEditHomework}
                 />
@@ -385,22 +485,21 @@ export function ScheduleDashboard(): React.JSX.Element {
             {upcomingHomeworks.length === 0 ? (
               <p className="kanban-empty">Дедлайнов пока нет</p>
             ) : (
-              upcomingHomeworks.map((homework) => {
-                const deadline = new Date(homework.deadline);
-                return (
-                  <article className="upcoming-item" key={homework.id}>
-                    <div className="date-tile accent-blue">
-                      <strong>{deadline.getDate()}</strong>
-                      <span>{formatDayCaption(deadline).split(" ")[1]?.slice(0, 3)}</span>
-                    </div>
-                    <div>
-                      <strong>{homework.subject ?? homework.title}</strong>
-                      <p>{homework.description}</p>
-                      <span>{formatDayCaption(deadline)}</span>
-                    </div>
-                  </article>
-                );
-              })
+              upcomingHomeworks.map((homework) => (
+                <article className="upcoming-item" key={homework.id}>
+                  <div className="date-tile accent-blue">
+                    <strong>{Number(deadlineDate(homework.deadline).slice(8, 10))}</strong>
+                    <span>
+                      {formatDeadline(homework.deadline).split(" ")[1]?.slice(0, 3)}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>{homework.subject ?? homework.title}</strong>
+                    <p>{homework.description}</p>
+                    <span>{formatDeadline(homework.deadline)}</span>
+                  </div>
+                </article>
+              ))
             )}
 
             <a className="text-link" href="/homework">
@@ -411,24 +510,20 @@ export function ScheduleDashboard(): React.JSX.Element {
       ) : (
         <section className="week-grid" aria-label="Расписание на неделю">
           {WEEK_DAYS.map((dayName) => {
-            const dayLessons = weekLessons.filter(
-              (lesson) =>
-                lesson.dayLabel === dayName &&
-                (lesson.subgroup === "all" || lesson.subgroup === subgroup),
-            );
+            const dayLessonsForGrid = lessonsForDay(dayName);
             return (
               <div
-                className={dayName === currentDayName(today) ? "week-column is-current" : "week-column"}
+                className={dayName === selectedDay ? "week-column is-current" : "week-column"}
                 key={dayName}
               >
                 <div className="week-column-title">
                   <span>{dayName}</span>
                   <strong>{weekdayDate(dayName, today).getDate()}</strong>
                 </div>
-                {dayLessons.length === 0 ? (
+                {dayLessonsForGrid.length === 0 ? (
                   <p className="kanban-empty">Пар нет</p>
                 ) : (
-                  dayLessons.map((lesson) => (
+                  dayLessonsForGrid.map((lesson) => (
                     <article className={`week-lesson accent-${lesson.accent}`} key={`${dayName}-${lesson.id}`}>
                       <span>{lesson.time}</span>
                       <strong>{lesson.subject}</strong>
@@ -448,11 +543,13 @@ export function ScheduleDashboard(): React.JSX.Element {
       {savedMessage ? <div className="toast" role="status">{savedMessage}</div> : null}
       <HomeworkEditor
         open={editorState.open}
-        lessons={lessonList}
+        lessons={dayLessons}
         initialMode={editorState.mode}
         initialData={editorState.initialData}
         onClose={() => setEditorState({ open: false, mode: "form", initialData: null })}
         onSave={handleSave}
+        onDelete={canManage ? handleDelete : undefined}
+        onParse={canManage ? api.parseHomework : undefined}
       />
     </div>
   );

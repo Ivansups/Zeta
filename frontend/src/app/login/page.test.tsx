@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import LoginPage from "./page";
 
@@ -92,5 +93,40 @@ describe("LoginPage", () => {
     expect(
       screen.getByRole("button", { name: "Попробовать снова" }),
     ).toBeInTheDocument();
+  });
+
+  it("hides the dev login button unless it is explicitly enabled", () => {
+    delete process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN;
+    render(<LoginPage />);
+
+    expect(
+      screen.queryByRole("button", { name: /Dev Login/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("signs in through the backend dev login endpoint when enabled", async () => {
+    process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN = "true";
+    const user = userEvent.setup();
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        user: { id: "dev-user", display_name: "Тестовый пользователь" },
+        access_token: "dev_token",
+      }),
+    } as Response);
+
+    render(<LoginPage />);
+    await user.click(screen.getByRole("button", { name: /Dev Login/i }));
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/auth/dev-login", {
+      method: "POST",
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Вы вошли" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Профиль Тестовый пользователь подтверждён/),
+    ).toBeInTheDocument();
+    delete process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN;
   });
 });

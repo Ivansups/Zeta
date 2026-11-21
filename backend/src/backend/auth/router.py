@@ -13,6 +13,7 @@ from fastapi import (
 )
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.auth.dependencies import (
     RequireAdmin,
@@ -72,13 +73,13 @@ def _set_auth_cookies(
         secure=True,
         samesite="lax",
         max_age=refresh_days * 86400,
-        path="/auth",
+        path="/",
     )
 
 
 def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(key="access_token", path="/")
-    response.delete_cookie(key="refresh_token", path="/auth")
+    response.delete_cookie(key="refresh_token", path="/")
 
 
 @router.post("/telegram/widget", response_model=TokenResponse)
@@ -208,6 +209,39 @@ async def login_telegram_webapp(
     )
 
 
+@router.post("/dev-login", response_model=TokenResponse)
+async def login_dev(
+    request: Request,
+    response: Response,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> TokenResponse:
+    """Local development login that never requires Telegram credentials."""
+    if not settings.dev_login_enabled or settings.environment.lower() == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dev login is disabled",
+        )
+
+    user, access_token, raw_refresh = await service.get_or_create_user(
+        telegram_id=settings.dev_login_telegram_id,
+        display_name="Тестовый пользователь",
+        username="dev_login",
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
+    _set_auth_cookies(
+        response=response,
+        access_token=access_token,
+        refresh_token=raw_refresh,
+        refresh_days=settings.refresh_token_expire_days,
+    )
+    return TokenResponse(
+        access_token=access_token,
+        user=UserResponse.model_validate(user),
+    )
+
+
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_tokens(
     request: Request,
@@ -270,8 +304,15 @@ async def logout(
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> UserResponse:
-    return UserResponse.model_validate(current_user)
+    stmt = (
+        select(User).options(selectinload(User.group)).where(User.id == current_user.id)
+    )
+    user = (await session.execute(stmt)).scalar_one()
+    response = UserResponse.model_validate(user)
+    response.group_name = user.group.name if user.group else None
+    return response
 
 
 @router.get("/users", response_model=list[UserResponse])

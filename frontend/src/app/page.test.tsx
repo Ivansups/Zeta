@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { api } from "@/lib/api";
 import { apiPair, apiUser } from "@/lib/test-fixtures";
+import { currentDayName } from "@/lib/week";
 
 import Home from "./page";
 
@@ -10,6 +11,9 @@ jest.mock("@/lib/api", () => ({
   api: {
     getMe: jest.fn(),
     getDaySchedule: jest.fn(),
+    updateHomework: jest.fn(),
+    deleteHomework: jest.fn(),
+    parseHomework: jest.fn(),
     getWeekSchedule: jest.fn(),
     getHomeworks: jest.fn(),
     createHomework: jest.fn(),
@@ -23,16 +27,21 @@ describe("Home", () => {
     mockedApi.getMe.mockResolvedValue(
       apiUser({ id: "me", role: "elder", display_name: "Данил Шелудько" }),
     );
-    mockedApi.getDaySchedule.mockResolvedValue([
-      apiPair({ id: "pair-math", pair_number: 1, subject: "Математический анализ" }),
+    mockedApi.getWeekSchedule.mockResolvedValue([
+      apiPair({
+        id: "pair-math",
+        pair_number: 1,
+        subject: "Математический анализ",
+        day_of_week: currentDayName(new Date()),
+      }),
       apiPair({
         id: "pair-algorithms",
         pair_number: 2,
         subject: "Алгоритмы и структуры данных",
         subgroup: 2,
+        day_of_week: currentDayName(new Date()),
       }),
     ]);
-    mockedApi.getWeekSchedule.mockResolvedValue([]);
     mockedApi.getHomeworks.mockResolvedValue([]);
   });
 

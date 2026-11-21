@@ -670,3 +670,114 @@ async def test_draft_cancel_integration(
         select(HomeworkDraft).where(HomeworkDraft.id == uuid.UUID(draft_id))
     )
     assert draft_in_db is None
+
+
+# =========================================================================
+# 4. RESPONSE MAPPING & AI PREVIEW REGRESSIONS
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_homework_maps_group_without_async_lazy_load(
+    client: AsyncClient, db_session: AsyncSession, test_settings: Settings
+) -> None:
+    """Regression: response mapping must not lazy-load group outside greenlet."""
+    group = await _create_group(db_session, "CS-801")
+    elder = await _create_user(
+        db_session, telegram_id=9701, role=RoleEnum.ELDER.value, group_id=group.id
+    )
+    await db_session.commit()
+    db_session.expunge_all()
+
+    resp = await client.post(
+        "/homework",
+        headers=_auth_header(elder, test_settings),
+        json={
+            "title": "Математический анализ",
+            "description": "Номера 45-50",
+            "subject": "Математический анализ",
+            "deadline": (_now() + timedelta(days=2)).isoformat(),
+            "subgroup": 1,
+        },
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["group_name"] == "CS-801"
+
+
+@pytest.mark.asyncio
+async def test_parse_homework_preview_for_authenticated_elder(
+    client: AsyncClient, db_session: AsyncSession, test_settings: Settings
+) -> None:
+    group = await _create_group(db_session, "CS-802")
+    elder = await _create_user(
+        db_session, telegram_id=9702, role=RoleEnum.ELDER.value, group_id=group.id
+    )
+
+    resp = await client.post(
+        "/homework/parse",
+        headers=_auth_header(elder, test_settings),
+        json={
+            "text": (
+                "ДЗ по матану: номера 45-50 к следующему понедельнику для 1 подгруппы"
+            )
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["subject"] == "Математический анализ"
+    assert data["subgroup"] == 1
+    assert "45-50" in data["description"]
+    assert "подгрупп" not in data["description"].lower()
+    assert data["deadline"] is not None
+
+
+@pytest.mark.asyncio
+async def test_parse_homework_preview_forbidden_for_student(
+    client: AsyncClient, db_session: AsyncSession, test_settings: Settings
+) -> None:
+    group = await _create_group(db_session, "CS-803")
+    student = await _create_user(
+        db_session,
+        telegram_id=9703,
+        role=RoleEnum.STUDENT.value,
+        group_id=group.id,
+        subgroup_number=1,
+    )
+
+    resp = await client.post(
+        "/homework/parse",
+        headers=_auth_header(student, test_settings),
+        json={"text": "ДЗ по питону: лаба 3"},
+    )
+
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_homework_can_clear_subgroup_to_group_wide(
+    client: AsyncClient, db_session: AsyncSession, test_settings: Settings
+) -> None:
+    group = await _create_group(db_session, "CS-804")
+    elder = await _create_user(
+        db_session, telegram_id=9704, role=RoleEnum.ELDER.value, group_id=group.id
+    )
+    homework = Homework(
+        group_id=group.id,
+        subgroup=1,
+        title="ДЗ подгруппы",
+        description="Только для первой",
+        deadline=_now() + timedelta(days=2),
+    )
+    db_session.add(homework)
+    await db_session.commit()
+
+    resp = await client.patch(
+        f"/homework/{homework.id}",
+        headers=_auth_header(elder, test_settings),
+        json={"subgroup": None},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["subgroup"] is None

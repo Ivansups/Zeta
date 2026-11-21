@@ -75,4 +75,22 @@ describe("API catch-all route handler", () => {
     expect(forwardedRequest.url).toBe("https://backend.example.test/health");
     expect(forwardedRequest.method).toBe("GET");
   });
+
+  it("forwards a bodyless POST without an empty body source", async () => {
+    fetchMock.mockResolvedValue(upstreamResponse({ detail: "Unauthorized" }, 401));
+
+    const response = await POST(
+      new Request("http://frontend.test/api/auth/refresh", { method: "POST" }),
+      {
+        params: Promise.resolve({ path: ["auth", "refresh"] }),
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const forwardedRequest = fetchMock.mock.calls[0][0] as Request;
+    expect(forwardedRequest.method).toBe("POST");
+    expect(forwardedRequest.body).toBeNull();
+    expect(forwardedRequest.headers.get("content-length")).toBeNull();
+    expect(response.status).toBe(401);
+  });
 });

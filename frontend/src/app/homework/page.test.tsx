@@ -11,6 +11,7 @@ jest.mock("@/lib/api", () => ({
   api: {
     getMe: jest.fn(),
     getHomeworks: jest.fn(),
+    getWeekSchedule: jest.fn(),
   },
 }));
 
@@ -25,6 +26,7 @@ function deadline(offsetDays: number): string {
 describe("HomeworkPage", () => {
   beforeEach(() => {
     mockedApi.getMe.mockResolvedValue(apiUser({ id: "me", role: "student" }));
+    mockedApi.getWeekSchedule.mockResolvedValue([]);
     mockedApi.getHomeworks.mockResolvedValue([
       apiHomework({
         id: "hw-today",
