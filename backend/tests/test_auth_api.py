@@ -343,3 +343,155 @@ async def test_transaction_commits_persisted_to_independent_session(
         persisted_user = user_res.scalar_one_or_none()
         assert persisted_user is not None
         assert persisted_user.telegram_id == 8888
+
+
+async def _create_elder_with_group(
+    client: AsyncClient, test_settings: Settings, telegram_id: int, group_name: str
+) -> str:
+    data = make_widget_auth_data(
+        telegram_id=telegram_id, bot_token=test_settings.telegram_bot_token
+    )
+    login = await client.post("/auth/telegram/widget", json=data)
+    access = login.json()["access_token"]
+    await client.post(
+        "/auth/groups",
+        json={"name": group_name},
+        headers={"Authorization": f"Bearer {access}"},
+    )
+    client.cookies.set("refresh_token", login.cookies["refresh_token"])
+    refreshed = await client.post("/auth/refresh")
+    token: str = refreshed.json()["access_token"]
+    return token
+
+
+async def test_list_users_returns_group_members(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(client, test_settings, 8001, "ZK-01")
+    invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 2},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    student_data = make_widget_auth_data(
+        telegram_id=8002,
+        bot_token=test_settings.telegram_bot_token,
+        invite_token=invite.json()["token"],
+    )
+    await client.post("/auth/telegram/widget", json=student_data)
+
+    resp = await client.get(
+        "/auth/users", headers={"Authorization": f"Bearer {elder_access}"}
+    )
+
+    assert resp.status_code == 200
+    users = {user["telegram_id"]: user for user in resp.json()}
+    assert set(users) == {8001, 8002}
+    assert users[8001]["role"] == "elder"
+    assert users[8002]["role"] == "student"
+    assert users[8002]["subgroup_number"] == 2
+
+
+async def test_list_users_forbidden_for_student(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(client, test_settings, 8101, "ZK-02")
+    invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    student_data = make_widget_auth_data(
+        telegram_id=8102,
+        bot_token=test_settings.telegram_bot_token,
+        invite_token=invite.json()["token"],
+    )
+    student_login = await client.post("/auth/telegram/widget", json=student_data)
+    student_access = student_login.json()["access_token"]
+
+    resp = await client.get(
+        "/auth/users", headers={"Authorization": f"Bearer {student_access}"}
+    )
+
+    assert resp.status_code == 403
+
+
+async def test_list_users_requires_authentication(client: AsyncClient) -> None:
+    resp = await client.get("/auth/users")
+
+    assert resp.status_code == 401
+
+
+async def test_elder_transfers_role_to_group_member(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(client, test_settings, 8201, "ZK-03")
+    invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    student_data = make_widget_auth_data(
+        telegram_id=8202,
+        bot_token=test_settings.telegram_bot_token,
+        invite_token=invite.json()["token"],
+    )
+    student_login = await client.post("/auth/telegram/widget", json=student_data)
+    student_id = student_login.json()["user"]["id"]
+
+    resp = await client.patch(
+        f"/auth/users/{student_id}/role",
+        json={"role": "elder"},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["role"] == "elder"
+
+    denied = await client.get(
+        "/auth/users", headers={"Authorization": f"Bearer {elder_access}"}
+    )
+    assert denied.status_code == 403
+
+    promoted_login = await client.post(
+        "/auth/telegram/widget",
+        json=make_widget_auth_data(
+            telegram_id=8202, bot_token=test_settings.telegram_bot_token
+        ),
+    )
+    promoted_access = promoted_login.json()["access_token"]
+    users = await client.get(
+        "/auth/users", headers={"Authorization": f"Bearer {promoted_access}"}
+    )
+    assert users.status_code == 200, users.text
+    roles = {user["telegram_id"]: user["role"] for user in users.json()}
+    assert roles[8202] == "elder"
+    assert roles[8201] == "student"
+
+
+async def test_student_cannot_change_roles(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(client, test_settings, 8301, "ZK-04")
+    invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    student_data = make_widget_auth_data(
+        telegram_id=8302,
+        bot_token=test_settings.telegram_bot_token,
+        invite_token=invite.json()["token"],
+    )
+    student_login = await client.post("/auth/telegram/widget", json=student_data)
+    student_access = student_login.json()["access_token"]
+    elder_id = student_login.json()["user"]["group_id"]
+
+    resp = await client.patch(
+        "/auth/users/00000000-0000-0000-0000-000000000000/role",
+        json={"role": "elder"},
+        headers={"Authorization": f"Bearer {student_access}"},
+    )
+
+    assert resp.status_code == 403
+    assert elder_id is not None

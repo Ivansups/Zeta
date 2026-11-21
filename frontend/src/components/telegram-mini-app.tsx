@@ -11,8 +11,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TouchEvent } from "react";
 
 import { api, type ApiHomework, type ApiSchedulePair } from "@/lib/api";
-import { lessons as fallbackLessons, weekDays } from "@/lib/mock-data";
 import { getTelegramWebApp } from "@/lib/telegram-web-app";
+import { WEEK_DAYS, addDays, formatDayCaption, shortDayName } from "@/lib/week";
 import type { Lesson, Subgroup } from "@/lib/types";
 
 import { LessonCard } from "./lesson-card";
@@ -27,27 +27,33 @@ type TelegramWebAppAuthResponse = {
   };
 };
 
-const WEEKDAY_LABELS: Record<string, string> = {
-  Пн: "Понедельник",
-  Вт: "Вторник",
-  Ср: "Среда",
-  Чт: "Четверг",
-  Пт: "Пятница",
-  Сб: "Суббота",
-  Вс: "Воскресенье",
-};
-
 const SWIPE_THRESHOLD_PX = 48;
 
-const miniAppDays = weekDays.map((day) => ({
-  ...day,
-  isoDate: `2026-10-${day.date}`,
-  label: `${WEEKDAY_LABELS[day.weekday] ?? day.weekday}, ${day.date} октября`,
-}));
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function buildMiniAppDays(reference: Date) {
+  const monday = addDays(reference, -((reference.getDay() + 6) % 7));
+  return WEEK_DAYS.map((dayName, index) => {
+    const date = addDays(monday, index);
+    return {
+      isoDate: isoDate(date),
+      weekday: shortDayName(date),
+      dayName,
+      date: date.getDate(),
+      label: `${dayName}, ${formatDayCaption(date)}`,
+      hasHomework: false,
+      active: isoDate(reference) === isoDate(date),
+    };
+  });
+}
+
+const miniAppDays = buildMiniAppDays(new Date());
 
 const DEFAULT_DAY_INDEX = Math.max(
   0,
-  weekDays.findIndex((day) => day.active),
+  miniAppDays.findIndex((day) => day.active),
 );
 
 function mapApiPairToLesson(pair: ApiSchedulePair, homeworks: ApiHomework[]): Lesson {
@@ -74,7 +80,7 @@ function mapApiPairToLesson(pair: ApiSchedulePair, homeworks: ApiHomework[]): Le
 
   return {
     id: pair.id,
-    date: "2026-10-15",
+    date: "",
     dayLabel: `${pair.day_of_week}`,
     time: pair.start_time.slice(0, 5),
     endTime: pair.end_time.slice(0, 5),
@@ -101,7 +107,7 @@ export function TelegramMiniApp(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState("");
   const [initData, setInitData] = useState<string | null>(null);
   const [dayIndex, setDayIndex] = useState(DEFAULT_DAY_INDEX);
-  const [realLessons, setRealLessons] = useState<Lesson[] | null>(null);
+  const [realLessons, setRealLessons] = useState<Lesson[]>([]);
   const touchStartX = useRef<number | null>(null);
 
   const authenticate = useCallback(async (rawInitData: string): Promise<void> => {
@@ -129,18 +135,13 @@ export function TelegramMiniApp(): React.JSX.Element {
       setStatus("ready");
 
       try {
-        const dayName = WEEKDAY_LABELS[miniAppDays[DEFAULT_DAY_INDEX]?.weekday] || "Понедельник";
         const [pairs, homeworks] = await Promise.all([
-          api.getDaySchedule({
-            day: dayName,
-            group_name: data.user?.group_id ? undefined : "ПИ-221",
-            group_id: data.user?.group_id || undefined,
-          }).catch(() => []),
+          api
+            .getWeekSchedule({ group_id: data.user?.group_id || undefined })
+            .catch(() => []),
           api.getHomeworks({ group_id: data.user?.group_id || undefined }).catch(() => []),
         ]);
-        if (pairs.length > 0) {
-          setRealLessons(pairs.map((p) => mapApiPairToLesson(p, homeworks)));
-        }
+        setRealLessons(pairs.map((p) => mapApiPairToLesson(p, homeworks)));
       } catch {
       }
     } catch (error: unknown) {
@@ -193,12 +194,10 @@ export function TelegramMiniApp(): React.JSX.Element {
   }, [authenticate]);
 
   const selectedDay = miniAppDays[dayIndex];
-  const dayLessons = useMemo(() => {
-    if (realLessons && realLessons.length > 0) {
-      return realLessons;
-    }
-    return fallbackLessons.filter((lesson) => lesson.date === selectedDay.isoDate);
-  }, [realLessons, selectedDay.isoDate]);
+  const dayLessons = useMemo(
+    () => realLessons.filter((lesson) => lesson.dayLabel === selectedDay.dayName),
+    [realLessons, selectedDay.dayName],
+  );
 
   function moveDay(delta: number): void {
     setDayIndex((current) =>

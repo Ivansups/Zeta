@@ -1,7 +1,6 @@
 "use client";
 
 import { ShieldCheck } from "lucide-react";
-import { students } from "@/lib/mock-data";
 import type { Student } from "@/lib/types";
 
 export function StudentCard({
@@ -54,9 +53,11 @@ export function StudentCard({
 }
 
 export function StudentsList({
+  students,
   studentRoles,
   onMakeHead,
 }: {
+  students: Student[];
   studentRoles: ReadonlyMap<string, Student["role"]>;
   onMakeHead: (student: Student) => void;
 }): React.JSX.Element {
@@ -69,6 +70,10 @@ export function StudentsList({
         </div>
         <span className="count-badge">{students.length} участников</span>
       </div>
+
+      {students.length === 0 ? (
+        <p className="kanban-empty">В группе пока нет участников</p>
+      ) : null}
 
       <ul className="students-card">
         {students.map((student) => {

@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { api, type ApiHomework } from "@/lib/api";
-import { lessons as fallbackLessons } from "@/lib/mock-data";
 import type { Lesson, Subgroup } from "@/lib/types";
+import { addDays, currentDayName, formatDayCaption } from "@/lib/week";
 
 type DayColumn = {
   date: string;
@@ -14,11 +14,18 @@ type DayColumn = {
   caption: string;
 };
 
-const columns: DayColumn[] = [
-  { date: "2026-10-15", title: "Сегодня", caption: "15 октября" },
-  { date: "2026-10-16", title: "Завтра", caption: "16 октября" },
-  { date: "2026-10-17", title: "Суббота", caption: "17 октября" },
-];
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function buildColumns(today: Date): DayColumn[] {
+  return [0, 1, 2].map((offset) => {
+    const date = addDays(today, offset);
+    const title =
+      offset === 0 ? "Сегодня" : offset === 1 ? "Завтра" : currentDayName(date);
+    return { date: isoDate(date), title, caption: formatDayCaption(date) };
+  });
+}
 
 function HomeworkCard({ lesson }: { lesson: Lesson }): React.JSX.Element {
   return (
@@ -45,13 +52,14 @@ function HomeworkCard({ lesson }: { lesson: Lesson }): React.JSX.Element {
 export function HomeworkBoard(): React.JSX.Element {
   const [subgroup, setSubgroup] = useState<Subgroup>(1);
   const [realHomeworks, setRealHomeworks] = useState<ApiHomework[] | null>(null);
+  const columns = useMemo(() => buildColumns(new Date()), []);
 
   useEffect(() => {
     let cancelled = false;
     async function load(): Promise<void> {
       try {
         const list = await api.getHomeworks();
-        if (!cancelled && list.length > 0) {
+        if (!cancelled) {
           setRealHomeworks(list);
         }
       } catch {
@@ -64,14 +72,14 @@ export function HomeworkBoard(): React.JSX.Element {
   }, []);
 
   const homeworkLessons = useMemo(() => {
-    if (realHomeworks && realHomeworks.length > 0) {
+    if (realHomeworks) {
       return realHomeworks
         .filter((hw) => !hw.subgroup || hw.subgroup === subgroup)
         .map((hw, idx) => ({
           id: hw.id,
-          date: hw.deadline ? hw.deadline.slice(0, 10) : "2026-10-15",
+          date: hw.deadline.slice(0, 10),
           dayLabel: "Срок сдачи",
-          time: hw.deadline ? hw.deadline.slice(11, 16) : "23:59",
+          time: hw.deadline.slice(11, 16) || "23:59",
           endTime: "",
           subject: hw.subject || hw.title,
           teacher: "",
@@ -82,15 +90,13 @@ export function HomeworkBoard(): React.JSX.Element {
           homework: {
             id: hw.id,
             description: hw.description,
-            dueDate: hw.deadline ? hw.deadline.slice(0, 10) : undefined,
+            dueDate: hw.deadline.slice(0, 10),
             subgroup: (hw.subgroup as Subgroup) || "all",
           },
         }));
     }
 
-    return fallbackLessons.filter(
-      (lesson) => lesson.homework && (lesson.subgroup === "all" || lesson.subgroup === subgroup),
-    );
+    return [];
   }, [realHomeworks, subgroup]);
 
   return (

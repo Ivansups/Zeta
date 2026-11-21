@@ -1,11 +1,32 @@
 "use client";
 
 import { Bell, ChevronRight, LogOut, Moon, Sun, UserRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { api } from "@/lib/api";
 
 export function ThemeSettings(): React.JSX.Element {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [notifications, setNotifications] = useState(true);
+  const [profile, setProfile] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.getMe().then((user) => {
+      if (cancelled || !user) {
+        return;
+      }
+      const name = user.display_name || user.username || `ID ${user.telegram_id}`;
+      const details = [
+        user.role === "elder" ? "староста" : user.role,
+        user.subgroup_number ? `подгруппа ${user.subgroup_number}` : "",
+      ].filter(Boolean);
+      setProfile(`${name}${details.length ? ` · ${details.join(" · ")}` : ""}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function changeTheme(nextTheme: "light" | "dark"): void {
     setTheme(nextTheme);
@@ -27,7 +48,10 @@ export function ThemeSettings(): React.JSX.Element {
         <div className="settings-group">
           <button className="settings-row" type="button">
             <span className="settings-icon"><UserRound size={18} strokeWidth={1.75} /></span>
-            <span><strong>Данил Шелудько</strong><small>ПИ-221 · подгруппа 1 · староста</small></span>
+            <span>
+              <strong>{profile ? profile.split(" · ")[0] : "Профиль"}</strong>
+              <small>{profile ? profile.split(" · ").slice(1).join(" · ") : "Войдите через Telegram"}</small>
+            </span>
             <ChevronRight size={18} />
           </button>
         </div>
