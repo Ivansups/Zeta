@@ -14,4 +14,6 @@ RUN uv sync --frozen --no-dev --no-cache
 RUN useradd -u 10001 -m appuser && chown -R appuser:appuser /app
 USER appuser
 
-CMD ["uv", "run", "python", "-m", "telegram_bot.main"]
+# Call the virtualenv interpreter directly: `uv run` would resolve and install
+# the dev dependency group on every container start.
+CMD [".venv/bin/python", "-m", "telegram_bot.main"]
