@@ -21,6 +21,7 @@ from backend.auth.dependencies import (
     get_current_user,
     get_settings,
     verify_internal_api_secret,
+    verify_telegram_user_allowed,
 )
 from backend.auth.models import InviteToken, RoleEnum, User
 from backend.auth.schemas import (
@@ -105,6 +106,12 @@ async def login_telegram_widget(
     username = validated_data.get("username")
     photo_url = validated_data.get("photo_url")
 
+    verify_telegram_user_allowed(
+        telegram_id=telegram_id,
+        username=username,
+        settings=settings,
+    )
+
     user_agent = request.headers.get("user-agent")
     ip_address = request.client.host if request.client else None
 
@@ -161,6 +168,12 @@ async def login_telegram_webapp(
     display_name = f"{first_name} {last_name}".strip() or None
     username = user_data.get("username")
     photo_url = user_data.get("photo_url")
+
+    verify_telegram_user_allowed(
+        telegram_id=telegram_id,
+        username=username,
+        settings=settings,
+    )
 
     user_agent = request.headers.get("user-agent")
     ip_address = request.client.host if request.client else None
