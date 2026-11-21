@@ -1,3 +1,5 @@
+"use client";
+
 import {
   BookOpen,
   CalendarDays,
@@ -8,7 +10,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+
+import { api, type ApiUser } from "@/lib/api";
+import { currentSemesterLabel, currentStudyWeek } from "@/lib/week";
 
 export type ShellUser = {
   name: string;
@@ -23,13 +28,6 @@ type AppShellProps = {
   user?: ShellUser | null;
 };
 
-const defaultUser: ShellUser = {
-  name: "Данил Шелудько",
-  role: "Староста",
-  group: "ПИ-221",
-  initials: "ДШ",
-};
-
 const navigation = [
   { id: "schedule", href: "/", label: "Расписание", icon: CalendarDays },
   { id: "homework", href: "/homework", label: "Задания", icon: BookOpen },
@@ -37,7 +35,55 @@ const navigation = [
   { id: "settings", href: "/settings", label: "Настройки", icon: Settings },
 ] as const;
 
-export function AppShell({ active, children, user = defaultUser }: AppShellProps): React.JSX.Element {
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Админ",
+  elder: "Староста",
+  helper: "Помощник",
+  curator: "Куратор",
+  student: "Студент",
+};
+
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+export function toShellUser(user: ApiUser): ShellUser {
+  const name = user.display_name || user.username || "Пользователь";
+  return {
+    name,
+    role: ROLE_LABELS[user.role] ?? user.role,
+    group: user.subgroup_number ? `Подгруппа ${user.subgroup_number}` : "",
+    initials: initialsOf(name),
+  };
+}
+
+export function AppShell({ active, children, user }: AppShellProps): React.JSX.Element {
+  const [currentUser, setCurrentUser] = useState<ShellUser | null | undefined>(user);
+  const semester = currentSemesterLabel(new Date());
+  const week = currentStudyWeek(new Date());
+
+  useEffect(() => {
+    if (user !== undefined) {
+      return;
+    }
+    let cancelled = false;
+    void api.getMe().then((remote) => {
+      if (!cancelled) {
+        setCurrentUser(remote ? toShellUser(remote) : null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const displayedUser = user !== undefined ? user : currentUser ?? null;
+
   return (
     <div className="app-frame">
       <aside className="sidebar" aria-label="Основная навигация">
@@ -71,17 +117,21 @@ export function AppShell({ active, children, user = defaultUser }: AppShellProps
         <div className="semester-card">
           <LayoutDashboard size={18} aria-hidden="true" />
           <div>
-            <strong>Осенний семестр</strong>
-            <span>7 учебная неделя</span>
+            <strong>{semester}</strong>
+            <span>{week} учебная неделя</span>
           </div>
         </div>
 
-        {user ? (
+        {displayedUser ? (
           <div className="profile-row">
-            <span className="avatar avatar-blue">{user.initials || user.name.slice(0, 2).toUpperCase()}</span>
+            <span className="avatar avatar-blue">
+              {displayedUser.initials || displayedUser.name.slice(0, 2).toUpperCase()}
+            </span>
             <div>
-              <strong>{user.name}</strong>
-              <span>{user.role} · {user.group}</span>
+              <strong>{displayedUser.name}</strong>
+              <span>
+                {[displayedUser.role, displayedUser.group].filter(Boolean).join(" · ")}
+              </span>
             </div>
           </div>
         ) : (
@@ -113,7 +163,7 @@ export function AppShell({ active, children, user = defaultUser }: AppShellProps
             </Link>
           );
         })}
-        {!user ? (
+        {!displayedUser ? (
           <Link
             className="mobile-login-link"
             href="/login"

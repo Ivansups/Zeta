@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { HomeworkBoard } from "@/components/homework-board";
+import { currentDayName, formatDayCaption } from "@/lib/week";
 
 export default function HomeworkPage(): React.JSX.Element {
   return (
@@ -7,11 +8,13 @@ export default function HomeworkPage(): React.JSX.Element {
       <div className="page-wrap">
         <header className="page-header">
           <div>
-            <p className="eyebrow">ПИ-221 · 7 учебная неделя</p>
+            <p className="eyebrow">Дедлайны по парам</p>
             <h1>Домашние задания</h1>
             <p className="page-subtitle">Держите учебные задачи в поле зрения</p>
           </div>
-          <span className="quiet-badge">Четверг, 15 октября</span>
+          <span className="quiet-badge">
+            {currentDayName(new Date())}, {formatDayCaption(new Date())}
+          </span>
         </header>
         <HomeworkBoard />
       </div>

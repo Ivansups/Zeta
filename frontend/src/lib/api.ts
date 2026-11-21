@@ -178,4 +178,25 @@ export const api = {
     const res = await fetch("/api/auth/invites", { method: "GET" });
     return handleResponse<ApiInvite[]>(res);
   },
+
+  async revokeInvite(inviteId: string): Promise<void> {
+    const res = await fetch(`/api/auth/invites/${inviteId}`, { method: "DELETE" });
+    if (!res.ok) {
+      throw new Error(`Failed to revoke invite: ${res.status}`);
+    }
+  },
+
+  async listUsers(): Promise<ApiUser[]> {
+    const res = await fetch("/api/auth/users", { method: "GET" });
+    return handleResponse<ApiUser[]>(res);
+  },
+
+  async setUserRole(userId: string, role: "elder" | "student"): Promise<ApiUser> {
+    const res = await fetch(`/api/auth/users/${userId}/role`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    return handleResponse<ApiUser>(res);
+  },
 };
