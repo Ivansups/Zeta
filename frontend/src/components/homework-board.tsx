@@ -2,9 +2,10 @@
 
 import { ChevronRight, Clock3, MapPin } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { lessons } from "@/lib/mock-data";
+import { api, type ApiHomework } from "@/lib/api";
+import { lessons as fallbackLessons } from "@/lib/mock-data";
 import type { Lesson, Subgroup } from "@/lib/types";
 
 type DayColumn = {
@@ -43,13 +44,54 @@ function HomeworkCard({ lesson }: { lesson: Lesson }): React.JSX.Element {
 
 export function HomeworkBoard(): React.JSX.Element {
   const [subgroup, setSubgroup] = useState<Subgroup>(1);
+  const [realHomeworks, setRealHomeworks] = useState<ApiHomework[] | null>(null);
 
-  const homeworkLessons = useMemo(
-    () => lessons.filter(
+  useEffect(() => {
+    let cancelled = false;
+    async function load(): Promise<void> {
+      try {
+        const list = await api.getHomeworks();
+        if (!cancelled && list.length > 0) {
+          setRealHomeworks(list);
+        }
+      } catch {
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const homeworkLessons = useMemo(() => {
+    if (realHomeworks && realHomeworks.length > 0) {
+      return realHomeworks
+        .filter((hw) => !hw.subgroup || hw.subgroup === subgroup)
+        .map((hw, idx) => ({
+          id: hw.id,
+          date: hw.deadline ? hw.deadline.slice(0, 10) : "2026-10-15",
+          dayLabel: "Срок сдачи",
+          time: hw.deadline ? hw.deadline.slice(11, 16) : "23:59",
+          endTime: "",
+          subject: hw.subject || hw.title,
+          teacher: "",
+          location: "Онлайн",
+          kind: "Практика" as const,
+          subgroup: (hw.subgroup as Subgroup) || ("all" as const),
+          accent: (["blue", "green", "coral", "violet"][idx % 4] as "blue" | "green" | "coral" | "violet"),
+          homework: {
+            id: hw.id,
+            description: hw.description,
+            dueDate: hw.deadline ? hw.deadline.slice(0, 10) : undefined,
+            subgroup: (hw.subgroup as Subgroup) || "all",
+          },
+        }));
+    }
+
+    return fallbackLessons.filter(
       (lesson) => lesson.homework && (lesson.subgroup === "all" || lesson.subgroup === subgroup),
-    ),
-    [subgroup],
-  );
+    );
+  }, [realHomeworks, subgroup]);
 
   return (
     <section className="homework-board" aria-label="Канбан домашних заданий">
@@ -68,7 +110,7 @@ export function HomeworkBoard(): React.JSX.Element {
       <div className="homework-board-summary">
         <span>{homeworkLessons.length} задания</span>
         <span className="summary-dot" aria-hidden="true" />
-        <span>Обновлено сегодня в 09:24</span>
+        <span>Актуальный список</span>
       </div>
 
       <div className="kanban-grid">
@@ -85,7 +127,7 @@ export function HomeworkBoard(): React.JSX.Element {
               </header>
               <div className="kanban-card-list">
                 {columnLessons.length ? columnLessons.map((lesson) => (
-                  <HomeworkCard key={lesson.homework?.id} lesson={lesson} />
+                  <HomeworkCard key={lesson.homework?.id || lesson.id} lesson={lesson} />
                 )) : <p className="kanban-empty">Заданий на этот день нет</p>}
               </div>
             </section>
