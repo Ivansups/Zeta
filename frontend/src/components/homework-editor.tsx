@@ -4,11 +4,11 @@ import { ArrowLeft, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 
 import { parseHomeworkPrompt } from "@/lib/llm-parser";
-import { lessons } from "@/lib/mock-data";
-import type { HomeworkDraft, Subgroup } from "@/lib/types";
+import type { HomeworkDraft, Lesson, Subgroup } from "@/lib/types";
 
 type HomeworkEditorProps = {
   open: boolean;
+  lessons: Lesson[];
   initialMode?: "form" | "assistant";
   initialData?: {
     id?: string;
@@ -22,6 +22,7 @@ type HomeworkEditorProps = {
 };
 
 function HomeworkEditorForm({
+  lessons,
   initialMode = "form",
   initialData,
   onClose,
@@ -35,12 +36,12 @@ function HomeworkEditorForm({
   const defaultLesson =
     lessons.find((lesson) => lesson.id === initialData?.lessonId) ?? lessons[0];
 
-  const [lessonId, setLessonId] = useState(initialData?.lessonId ?? defaultLesson.id);
+  const [lessonId, setLessonId] = useState(initialData?.lessonId ?? defaultLesson?.id ?? "");
   const [subgroup, setSubgroup] = useState<Subgroup | "all">(
-    initialData?.subgroup ?? defaultLesson.subgroup,
+    initialData?.subgroup ?? defaultLesson?.subgroup ?? "all",
   );
   const [dueDate, setDueDate] = useState(
-    initialData?.dueDate ?? defaultLesson.date,
+    initialData?.dueDate ?? defaultLesson?.date ?? "",
   );
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [errors, setErrors] = useState<{
@@ -115,7 +116,7 @@ function HomeworkEditorForm({
       ...(initialData?.id ? { id: initialData.id } : {}),
       lessonId,
       subgroup,
-      dueDate: dueDate.trim() || selectedLesson.date,
+      dueDate: dueDate.trim() || selectedLesson?.date || "",
       description: description.trim(),
     });
     resetAndClose();
@@ -252,7 +253,9 @@ function HomeworkEditorForm({
                 <div className="picker-fade picker-fade-bottom" />
               </div>
               <p className="picker-caption">
-                {selectedLesson.dayLabel} · {selectedLesson.time}–{selectedLesson.endTime}
+                {selectedLesson
+                  ? `${selectedLesson.dayLabel} · ${selectedLesson.time}–${selectedLesson.endTime}`
+                  : "Нет пар для привязки задания"}
               </p>
 
               <label className="field-label" htmlFor="subgroup">
@@ -346,6 +349,7 @@ function HomeworkEditorForm({
 
 export function HomeworkEditor({
   open,
+  lessons,
   initialMode,
   initialData,
   onClose,
@@ -360,6 +364,7 @@ export function HomeworkEditor({
   return (
     <HomeworkEditorForm
       key={key}
+      lessons={lessons}
       initialMode={initialMode}
       initialData={initialData}
       onClose={onClose}

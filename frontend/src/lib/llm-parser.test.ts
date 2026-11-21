@@ -1,4 +1,4 @@
-import { lessons } from "./mock-data";
+import { testLessons as lessons } from "./test-fixtures";
 import { parseHomeworkPrompt, resolveTargetDate } from "./llm-parser";
 
 describe("parseHomeworkPrompt", () => {

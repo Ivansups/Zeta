@@ -37,6 +37,7 @@ from backend.auth.schemas import (
     TelegramWidgetAuthRequest,
     TokenResponse,
     UserResponse,
+    UserRoleUpdateRequest,
 )
 from backend.auth.security import (
     validate_telegram_webapp_init_data,
@@ -271,6 +272,41 @@ async def get_me(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserResponse:
     return UserResponse.model_validate(current_user)
+
+
+@router.get("/users", response_model=list[UserResponse])
+async def list_users(
+    current_user: RequireElder,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> list[UserResponse]:
+    """List group members for an elder, or every user for an admin."""
+    users = await service.list_group_users(current_user)
+    return [UserResponse.model_validate(user) for user in users]
+
+
+@router.patch("/users/{user_id}/role", response_model=UserResponse)
+async def update_user_role(
+    user_id: uuid.UUID,
+    payload: UserRoleUpdateRequest,
+    current_user: RequireElder,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> UserResponse:
+    """Assign the elder or student role inside the actor's own group."""
+    try:
+        user = await service.set_user_role(current_user, user_id, payload.role)
+    except LookupError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(err)
+        ) from err
+    except PermissionError as err:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(err)
+        ) from err
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from err
+    return UserResponse.model_validate(user)
 
 
 @router.post("/groups", response_model=GroupResponse)

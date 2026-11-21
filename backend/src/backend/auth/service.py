@@ -336,6 +336,54 @@ class AuthService:
         await self.session.commit()
         return invite, raw_token
 
+    async def list_group_users(self, actor: User) -> list[User]:
+        """List users visible to an elder (own group) or an admin (everyone)."""
+        stmt = select(User).order_by(User.created_at, User.telegram_id)
+        if actor.role != RoleEnum.ADMIN.value:
+            if actor.group_id is None:
+                return []
+            stmt = stmt.where(User.group_id == actor.group_id)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def set_user_role(self, actor: User, target_id: uuid.UUID, role: str) -> User:
+        """Change a group member role; a new elder replaces the previous one."""
+        if role not in (RoleEnum.ELDER.value, RoleEnum.STUDENT.value):
+            msg = "Only elder and student roles can be assigned"
+            raise ValueError(msg)
+
+        stmt = select(User).where(User.id == target_id).with_for_update()
+        target = (await self.session.execute(stmt)).scalar_one_or_none()
+        if target is None:
+            raise LookupError("User not found")
+
+        if actor.role != RoleEnum.ADMIN.value and (
+            actor.group_id is None or target.group_id != actor.group_id
+        ):
+            raise PermissionError("Cannot change role of another group member")
+
+        if role == RoleEnum.ELDER.value and target.group_id is not None:
+            elders = await self.session.execute(
+                select(User).where(
+                    User.group_id == target.group_id,
+                    User.role == RoleEnum.ELDER.value,
+                )
+            )
+            for other in elders.scalars():
+                if other.id != target.id:
+                    other.role = RoleEnum.STUDENT.value
+
+        target.role = role
+        self.session.add(
+            AuditLog(
+                user_id=actor.id,
+                event="ROLE_CHANGE",
+                details=f"Set role={role} for user {target_id}",
+            )
+        )
+        await self.session.commit()
+        return target
+
     async def revoke_invite(self, user: User, invite_id: uuid.UUID) -> None:
         """Revoke an invite link."""
         stmt = select(InviteToken).where(InviteToken.id == invite_id).with_for_update()

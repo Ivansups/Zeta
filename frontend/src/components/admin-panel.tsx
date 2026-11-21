@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api } from "@/lib/api";
-import { students } from "@/lib/mock-data";
+import { api, type ApiInvite, type ApiUser } from "@/lib/api";
 import type { Student, Subgroup } from "@/lib/types";
 
 import { CreateGroupCard } from "./admin/create-group-card";
@@ -12,13 +11,23 @@ import { StudentsList } from "./admin/students-list";
 
 type Tab = "invites" | "students" | "create_group";
 
-const initialInvitations: Invitation[] = [
-  { subgroup: 1, link: null },
-  { subgroup: 2, link: null },
-];
+const COLORS = ["blue", "green", "coral", "violet"] as const;
 
-function invitationLink(subgroup: Subgroup, sequence: number): string {
-  return `https://zeta.study/invite/pi-221-${subgroup}-${sequence}`;
+function toStudent(user: ApiUser, index: number): Student {
+  const name = user.display_name || user.username || `ID ${user.telegram_id}`;
+  return {
+    id: user.id,
+    name,
+    initials: name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join(""),
+    subgroup: (user.subgroup_number as Subgroup) || 1,
+    role: user.role === "elder" ? "Староста" : "Студент",
+    color: COLORS[index % COLORS.length],
+  };
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -44,65 +53,69 @@ async function copyText(text: string): Promise<boolean> {
 
 export function AdminPanel(): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<Tab>("invites");
-  const [invitations, setInvitations] = useState<Invitation[]>(initialInvitations);
+  const [invitations, setInvitations] = useState<Invitation[]>([
+    { subgroup: 1, link: null },
+    { subgroup: 2, link: null },
+  ]);
+  const [inviteIds, setInviteIds] = useState<ReadonlyMap<Subgroup, string>>(new Map());
+  const [students, setStudents] = useState<Student[]>([]);
   const [studentRoles, setStudentRoles] = useState<ReadonlyMap<string, Student["role"]>>(
-    () => new Map(students.map((student) => [student.id, student.role])),
+    new Map(),
   );
-  const [sequence, setSequence] = useState(0);
+  const [canManage, setCanManage] = useState(false);
   const [feedback, setFeedback] = useState<string>("");
 
   useEffect(() => {
     async function loadData(): Promise<void> {
-      try {
-        const user = await api.getMe();
-        if (user?.role === "elder" || user?.role === "admin") {
-          const remoteInvites = await api.listInvites().catch(() => []);
-          if (remoteInvites.length > 0) {
-            setInvitations((prev) =>
-              prev.map((item) => {
-                const found = remoteInvites.find(
-                  (inv) => inv.subgroup_number === item.subgroup,
-                );
-                return found
-                  ? {
-                      subgroup: item.subgroup,
-                      link: `${window.location.origin}${found.invite_url}`,
-                    }
-                  : item;
-              }),
-            );
-          }
-        }
-      } catch {
+      const user = await api.getMe();
+      if (user?.role !== "elder" && user?.role !== "admin") {
+        return;
       }
+      setCanManage(true);
+
+      const [remoteInvites, remoteUsers] = await Promise.all([
+        api.listInvites().catch(() => [] as ApiInvite[]),
+        api.listUsers().catch(() => [] as ApiUser[]),
+      ]);
+
+      setInvitations((current) =>
+        current.map((invitation) => {
+          const found = remoteInvites.find(
+            (invite) => invite.subgroup_number === invitation.subgroup,
+          );
+          return found
+            ? { subgroup: invitation.subgroup, link: found.invite_url }
+            : invitation;
+        }),
+      );
+      setInviteIds(
+        new Map(
+          remoteInvites
+            .filter((invite) => invite.subgroup_number === 1 || invite.subgroup_number === 2)
+            .map((invite) => [invite.subgroup_number as Subgroup, invite.id]),
+        ),
+      );
+
+      const mapped = remoteUsers.map(toStudent);
+      setStudents(mapped);
+      setStudentRoles(new Map(mapped.map((student) => [student.id, student.role])));
     }
     void loadData();
   }, []);
 
-  function createInvitation(subgroup: Subgroup): void {
-    const nextSequence = sequence + 1;
-    setSequence(nextSequence);
-    const link = invitationLink(subgroup, nextSequence);
-
-    setInvitations((current) =>
-      current.map((invitation) =>
-        invitation.subgroup === subgroup ? { ...invitation, link } : invitation,
-      ),
-    );
-    setFeedback(`Ссылка для подгруппы ${subgroup} создана`);
-
-    void api.createStudentInvite(subgroup).then((resp) => {
-      if (resp?.invite_url) {
-        setInvitations((current) =>
-          current.map((inv) =>
-            inv.subgroup === subgroup
-              ? { ...inv, link: `${window.location.origin}${resp.invite_url}` }
-              : inv,
-          ),
-        );
-      }
-    }).catch(() => {
-    });
+  async function createInvitation(subgroup: Subgroup): Promise<void> {
+    try {
+      const invite = await api.createStudentInvite(subgroup);
+      setInvitations((current) =>
+        current.map((item) =>
+          item.subgroup === subgroup ? { ...item, link: invite.invite_url } : item,
+        ),
+      );
+      setInviteIds((current) => new Map(current).set(subgroup, invite.id));
+      setFeedback(`Ссылка для подгруппы ${subgroup} создана`);
+    } catch {
+      setFeedback("Не удалось создать ссылку. Попробуй позже.");
+    }
   }
 
   async function copyInvitation(subgroup: Subgroup, link: string): Promise<void> {
@@ -113,20 +126,40 @@ export function AdminPanel(): React.JSX.Element {
     }
   }
 
-  function revokeInvitation(subgroup: Subgroup): void {
-    setInvitations((current) =>
-      current.map((invitation) =>
-        invitation.subgroup === subgroup ? { ...invitation, link: null } : invitation,
-      ),
-    );
-    setFeedback(`Ссылка отозвана для подгруппы ${subgroup}`);
+  async function revokeInvitation(subgroup: Subgroup): Promise<void> {
+    const inviteId = inviteIds.get(subgroup);
+    if (!inviteId) {
+      setFeedback("Активной ссылки для этой подгруппы нет");
+      return;
+    }
+    try {
+      await api.revokeInvite(inviteId);
+      setInvitations((current) =>
+        current.map((invitation) =>
+          invitation.subgroup === subgroup ? { ...invitation, link: null } : invitation,
+        ),
+      );
+      setInviteIds((current) => {
+        const next = new Map(current);
+        next.delete(subgroup);
+        return next;
+      });
+      setFeedback(`Ссылка отозвана для подгруппы ${subgroup}`);
+    } catch {
+      setFeedback("Не удалось отозвать ссылку. Попробуй позже.");
+    }
   }
 
-  function makeHead(student: Student): void {
-    setStudentRoles(
-      new Map(students.map((item) => [item.id, item.id === student.id ? "Староста" : "Студент"])),
-    );
-    setFeedback(`${student.name} теперь староста`);
+  async function makeHead(student: Student): Promise<void> {
+    try {
+      await api.setUserRole(student.id, "elder");
+      setStudentRoles(
+        new Map(students.map((item) => [item.id, item.id === student.id ? "Староста" : "Студент"])),
+      );
+      setFeedback(`${student.name} теперь староста`);
+    } catch {
+      setFeedback("Не удалось сменить старосту. Попробуй позже.");
+    }
   }
 
   return (
@@ -170,7 +203,11 @@ export function AdminPanel(): React.JSX.Element {
         </button>
       </div>
 
-      {activeTab === "invites" ? (
+      {!canManage ? (
+        <p className="kanban-empty">
+          Управление доступно старосте и администратору группы.
+        </p>
+      ) : activeTab === "invites" ? (
         <section
           className="invite-grid"
           id="invites-panel"
@@ -189,7 +226,11 @@ export function AdminPanel(): React.JSX.Element {
         </section>
       ) : activeTab === "students" ? (
         <div id="students-panel" role="tabpanel" aria-labelledby="students-tab">
-          <StudentsList studentRoles={studentRoles} onMakeHead={makeHead} />
+          <StudentsList
+            students={students}
+            studentRoles={studentRoles}
+            onMakeHead={makeHead}
+          />
         </div>
       ) : (
         <div id="create-group-panel" role="tabpanel" aria-labelledby="create-group-tab">
