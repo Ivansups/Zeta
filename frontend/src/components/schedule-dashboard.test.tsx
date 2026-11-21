@@ -251,12 +251,12 @@ describe("ScheduleDashboard", () => {
 
   it("switches the visible day when a week strip day is clicked", async () => {
     const user = userEvent.setup();
-    const tomorrow = addDays(today, 1);
+    const otherDay = today.getDay() === 0 ? addDays(today, -1) : addDays(today, 1);
     mockedApi.getWeekSchedule.mockResolvedValue([
       apiPair({
         id: "33333333-3333-3333-3333-333333333333",
         subject: "История России",
-        day_of_week: currentDayName(tomorrow),
+        day_of_week: currentDayName(otherDay),
       }),
     ]);
     mockedApi.getHomeworks.mockResolvedValue([]);
@@ -267,7 +267,7 @@ describe("ScheduleDashboard", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: `${currentDayName(tomorrow)} ${tomorrow.getDate()}`,
+        name: `${currentDayName(otherDay)} ${otherDay.getDate()}`,
       }),
     );
 

@@ -57,6 +57,8 @@ describe("TelegramMiniApp", () => {
 
   beforeEach(() => {
     mockedApi.getHomeworks.mockResolvedValue([]);
+    const isSunday = new Date().getDay() === 0;
+    const targetOffset = isSunday ? -1 : 1;
     mockedApi.getWeekSchedule.mockResolvedValue([
       apiPair({
         id: "pair-math",
@@ -65,7 +67,7 @@ describe("TelegramMiniApp", () => {
       }),
       apiPair({
         id: "pair-discrete",
-        day_of_week: currentDayName(addDays(new Date(), 1)),
+        day_of_week: currentDayName(addDays(new Date(), targetOffset)),
         subject: "Дискретная математика",
         pair_number: 2,
       }),
@@ -118,9 +120,11 @@ describe("TelegramMiniApp", () => {
     render(<TelegramMiniApp />);
 
     expect(await screen.findByText("Иван Тестов")).toBeInTheDocument();
+    const isSunday = new Date().getDay() === 0;
+    const targetOffset = isSunday ? -1 : 1;
     fireEvent.click(
       screen.getByRole("button", {
-        name: `${currentDayName(addDays(new Date(), 1))}, ${dayLabel(1)}`,
+        name: `${currentDayName(addDays(new Date(), targetOffset))}, ${dayLabel(targetOffset)}`,
       }),
     );
 
@@ -136,16 +140,25 @@ describe("TelegramMiniApp", () => {
 
     expect(await screen.findByText("Иван Тестов")).toBeInTheDocument();
     const panel = screen.getByTestId("tg-day-panel");
+    const isSunday = new Date().getDay() === 0;
 
-    fireEvent.touchStart(panel, { touches: [{ clientX: 220 }] });
-    fireEvent.touchEnd(panel, { changedTouches: [{ clientX: 60 }] });
+    if (isSunday) {
+      fireEvent.touchStart(panel, { touches: [{ clientX: 60 }] });
+      fireEvent.touchEnd(panel, { changedTouches: [{ clientX: 220 }] });
+      expect(screen.getByText("Дискретная математика")).toBeInTheDocument();
 
-    expect(screen.getByText("Дискретная математика")).toBeInTheDocument();
+      fireEvent.touchStart(panel, { touches: [{ clientX: 220 }] });
+      fireEvent.touchEnd(panel, { changedTouches: [{ clientX: 60 }] });
+      expect(screen.getByText("Математический анализ")).toBeInTheDocument();
+    } else {
+      fireEvent.touchStart(panel, { touches: [{ clientX: 220 }] });
+      fireEvent.touchEnd(panel, { changedTouches: [{ clientX: 60 }] });
+      expect(screen.getByText("Дискретная математика")).toBeInTheDocument();
 
-    fireEvent.touchStart(panel, { touches: [{ clientX: 60 }] });
-    fireEvent.touchEnd(panel, { changedTouches: [{ clientX: 220 }] });
-
-    expect(screen.getByText("Математический анализ")).toBeInTheDocument();
+      fireEvent.touchStart(panel, { touches: [{ clientX: 60 }] });
+      fireEvent.touchEnd(panel, { changedTouches: [{ clientX: 220 }] });
+      expect(screen.getByText("Математический анализ")).toBeInTheDocument();
+    }
   });
 
   it("shows the backend validation error and offers a retry", async () => {

@@ -12,7 +12,9 @@ def build_onboarding_keyboard(
         if invite_token
         else web_app_url
     )
-    button_text = "🌐 Вступить в группу в Zeta" if invite_token else "🌐 Открыть Zeta Web"
+    button_text = (
+        "🌐 Вступить в группу в Zeta" if invite_token else "🌐 Открыть Zeta Web"
+    )
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
