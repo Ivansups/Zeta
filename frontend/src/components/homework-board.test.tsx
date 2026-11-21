@@ -133,4 +133,45 @@ describe("HomeworkBoard", () => {
       screen.getByText("Подготовить доклад по истории"),
     ).toBeInTheDocument();
   });
+
+  it("switches to calendar mode by weekdays and displays 7 days", async () => {
+    const user = userEvent.setup();
+    render(<HomeworkBoard />);
+
+    await screen.findByText("Исследовать ряды на сходимость");
+    await user.click(screen.getByRole("button", { name: "По дням недели" }));
+
+    expect(screen.getByText("Задания на неделю")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Навигация по неделям" })).toBeInTheDocument();
+
+    // Check weekday columns presence
+    expect(screen.getByText("Понедельник")).toBeInTheDocument();
+    expect(screen.getByText("Вторник")).toBeInTheDocument();
+    expect(screen.getByText("Среда")).toBeInTheDocument();
+    expect(screen.getByText("Четверг")).toBeInTheDocument();
+    expect(screen.getByText("Пятница")).toBeInTheDocument();
+    expect(screen.getByText("Суббота")).toBeInTheDocument();
+    expect(screen.getByText("Воскресенье")).toBeInTheDocument();
+
+    // Today's homework is visible in calendar mode
+    expect(screen.getByText("Исследовать ряды на сходимость")).toBeInTheDocument();
+  });
+
+  it("supports week navigation in calendar mode", async () => {
+    const user = userEvent.setup();
+    render(<HomeworkBoard />);
+
+    await screen.findByText("Исследовать ряды на сходимость");
+    await user.click(screen.getByRole("button", { name: "По дням недели" }));
+
+    expect(screen.getByText("Текущая неделя")).toBeInTheDocument();
+
+    // Navigate to next week
+    await user.click(screen.getByRole("button", { name: "Следующая неделя" }));
+    expect(screen.getByRole("button", { name: "Вернуться к текущей" })).toBeInTheDocument();
+
+    // Return back to current week
+    await user.click(screen.getByRole("button", { name: "Вернуться к текущей" }));
+    expect(screen.getByText("Текущая неделя")).toBeInTheDocument();
+  });
 });

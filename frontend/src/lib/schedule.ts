@@ -24,7 +24,15 @@ export function lessonLocationOf(
     return null;
   }
   if (pair.room) {
-    return `ауд. ${pair.room}`;
+    const trimmed = pair.room.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === "онлайн" || lower === "дистант" || lower === "online") {
+      return "Онлайн";
+    }
+    if (lower.startsWith("ауд")) {
+      return trimmed;
+    }
+    return `ауд. ${trimmed}`;
   }
   return pair.is_online ? "Онлайн" : null;
 }
