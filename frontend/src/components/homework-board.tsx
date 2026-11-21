@@ -1,19 +1,33 @@
 "use client";
 
-import { CalendarDays, ChevronRight, Clock3, MapPin } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  MapPin,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { HomeworkDescription } from "@/components/homework-description";
-import { api, type ApiHomework, type ApiSchedulePair, type ApiUser } from "@/lib/api";
-import { formatDeadline } from "@/lib/dates";
 import {
+  api,
+  type ApiHomework,
+  type ApiSchedulePair,
+} from "@/lib/api";
+import { deadlineDate, formatDeadline } from "@/lib/dates";
+import {
+  buildCalendarWeekColumns,
   buildHomeworkColumns,
   columnKeyForDeadline,
+  getWeekMonday,
   type HomeworkColumnKey,
+  type HomeworkViewMode,
 } from "@/lib/homework-columns";
 import { lessonKindOf, lessonLocationOf } from "@/lib/schedule";
 import type { Subgroup } from "@/lib/types";
+import { addDays, currentDayName, formatDayCaption } from "@/lib/week";
 
 function homeworksLabel(count: number): string {
   const mod10 = count % 10;
@@ -45,11 +59,29 @@ function findPair(
       return byId;
     }
   }
-  return pairs.find(
+  const matching = pairs.filter(
     (pair) =>
       pair.subject.toLowerCase() === (homework.subject ?? "").toLowerCase() &&
       (!homework.subgroup || homework.subgroup === pair.subgroup),
   );
+  if (matching.length === 0) {
+    return undefined;
+  }
+  if (matching.length === 1) {
+    return matching[0];
+  }
+  if (homework.deadline) {
+    const [y, m, d] = deadlineDate(homework.deadline).split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    const dayName = currentDayName(date);
+    const onSameDay = matching.find(
+      (pair) => pair.day_of_week.toLowerCase() === dayName.toLowerCase(),
+    );
+    if (onSameDay) {
+      return onSameDay;
+    }
+  }
+  return matching[0];
 }
 
 function HomeworkCard({ card }: { card: BoardCard }): React.JSX.Element {
@@ -97,11 +129,28 @@ function HomeworkCard({ card }: { card: BoardCard }): React.JSX.Element {
 }
 
 export function HomeworkBoard(): React.JSX.Element {
-  const [user, setUser] = useState<ApiUser | null>(null);
+  const [viewMode, setViewMode] = useState<HomeworkViewMode>("timeline");
   const [subgroup, setSubgroup] = useState<Subgroup | "all">(1);
+  const [weekOffset, setWeekOffset] = useState<number>(0);
   const [homeworks, setHomeworks] = useState<ApiHomework[] | null>(null);
   const [pairs, setPairs] = useState<ApiSchedulePair[]>([]);
-  const columns = useMemo(() => buildHomeworkColumns(new Date()), []);
+
+  const today = useMemo(() => new Date(), []);
+  const timelineColumns = useMemo(() => buildHomeworkColumns(today), [today]);
+
+  const currentMonday = useMemo(() => getWeekMonday(today), [today]);
+  const selectedMonday = useMemo(
+    () => addDays(currentMonday, weekOffset * 7),
+    [currentMonday, weekOffset],
+  );
+  const selectedSunday = useMemo(
+    () => addDays(selectedMonday, 6),
+    [selectedMonday],
+  );
+  const calendarColumns = useMemo(
+    () => buildCalendarWeekColumns(selectedMonday, today),
+    [selectedMonday, today],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -111,7 +160,6 @@ export function HomeworkBoard(): React.JSX.Element {
         return;
       }
       if (me) {
-        setUser(me);
         setSubgroup(me.subgroup_number === 2 ? 2 : 1);
       }
       const [list, weekPairs] = await Promise.all([
@@ -148,7 +196,6 @@ export function HomeworkBoard(): React.JSX.Element {
   }, [homeworks, subgroup, pairs]);
 
   const cardsByColumn = useMemo(() => {
-    const today = new Date();
     const grouped: Record<HomeworkColumnKey, BoardCard[]> = {
       overdue: [],
       today: [],
@@ -159,85 +206,240 @@ export function HomeworkBoard(): React.JSX.Element {
       grouped[columnKeyForDeadline(card.homework.deadline, today)].push(card);
     });
     return grouped;
-  }, [cards]);
+  }, [cards, today]);
+
+  const cardsByDay = useMemo(() => {
+    const map = new Map<string, BoardCard[]>();
+    calendarColumns.forEach((col) => map.set(col.date, []));
+    cards.forEach((card) => {
+      const date = deadlineDate(card.homework.deadline);
+      const list = map.get(date);
+      if (list) {
+        list.push(card);
+      }
+    });
+    return map;
+  }, [cards, calendarColumns]);
+
+  const weekCardsCount = useMemo(() => {
+    let count = 0;
+    calendarColumns.forEach((col) => {
+      count += cardsByDay.get(col.date)?.length ?? 0;
+    });
+    return count;
+  }, [calendarColumns, cardsByDay]);
 
   return (
     <section className="homework-board" aria-label="Канбан домашних заданий">
       <div className="homework-board-toolbar">
         <div>
-          <p className="eyebrow">По срокам сдачи</p>
-          <h2>Ближайшие задания</h2>
+          <p className="eyebrow">
+            {viewMode === "timeline" ? "По срокам сдачи" : "По дням недели"}
+          </p>
+          <h2>
+            {viewMode === "timeline" ? "Ближайшие задания" : "Задания на неделю"}
+          </h2>
           <p className="page-subtitle">
-            {user?.role === "student"
-              ? "Каждое ДЗ остаётся у своей пары"
-              : "Каждое ДЗ остаётся у своей пары, сроки не теряются"}
+            {viewMode === "timeline"
+              ? "Срочные дедлайны и долги в одном месте"
+              : "Распределение заданий по учебным дням недели"}
           </p>
         </div>
-        <div className="segmented-control" role="group" aria-label="Подгруппа">
-          <button
-            className={subgroup === "all" ? "is-active" : ""}
-            type="button"
-            onClick={() => setSubgroup("all")}
+        <div className="homework-board-controls">
+          <div
+            className="segmented-control"
+            role="group"
+            aria-label="Режим просмотра"
           >
-            Все
-          </button>
-          <button
-            className={subgroup === 1 ? "is-active" : ""}
-            type="button"
-            onClick={() => setSubgroup(1)}
+            <button
+              className={viewMode === "timeline" ? "is-active" : ""}
+              type="button"
+              onClick={() => setViewMode("timeline")}
+            >
+              По срокам
+            </button>
+            <button
+              className={viewMode === "days" ? "is-active" : ""}
+              type="button"
+              onClick={() => setViewMode("days")}
+            >
+              По дням недели
+            </button>
+          </div>
+
+          <div
+            className="segmented-control"
+            role="group"
+            aria-label="Подгруппа"
           >
-            Подгруппа 1
-          </button>
-          <button
-            className={subgroup === 2 ? "is-active" : ""}
-            type="button"
-            onClick={() => setSubgroup(2)}
-          >
-            Подгруппа 2
-          </button>
+            <button
+              className={subgroup === "all" ? "is-active" : ""}
+              type="button"
+              onClick={() => setSubgroup("all")}
+            >
+              Все
+            </button>
+            <button
+              className={subgroup === 1 ? "is-active" : ""}
+              type="button"
+              onClick={() => setSubgroup(1)}
+            >
+              Подгруппа 1
+            </button>
+            <button
+              className={subgroup === 2 ? "is-active" : ""}
+              type="button"
+              onClick={() => setSubgroup(2)}
+            >
+              Подгруппа 2
+            </button>
+          </div>
         </div>
       </div>
 
+      {viewMode === "days" ? (
+        <nav className="calendar-nav-bar" aria-label="Навигация по неделям">
+          <div className="calendar-week-switcher">
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setWeekOffset((prev) => prev - 1)}
+              aria-label="Предыдущая неделя"
+            >
+              <ChevronLeft size={16} strokeWidth={2} />
+              <span>Пред. неделя</span>
+            </button>
+            <div className="calendar-week-heading">
+              <span>
+                {formatDayCaption(selectedMonday)} — {formatDayCaption(selectedSunday)}
+              </span>
+              {weekOffset === 0 ? (
+                <span className="current-week-tag">Текущая неделя</span>
+              ) : (
+                <button
+                  type="button"
+                  className="calendar-reset-btn"
+                  onClick={() => setWeekOffset(0)}
+                >
+                  Вернуться к текущей
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setWeekOffset((prev) => prev + 1)}
+              aria-label="Следующая неделя"
+            >
+              <span>След. неделя</span>
+              <ChevronRight size={16} strokeWidth={2} />
+            </button>
+          </div>
+        </nav>
+      ) : null}
+
       <div className="homework-board-summary">
-        <span>{homeworksLabel(cards.length)}</span>
-        <span className="summary-dot" aria-hidden="true" />
-        <span>Актуальный список</span>
+        {viewMode === "timeline" ? (
+          <>
+            <span>{homeworksLabel(cards.length)}</span>
+            <span className="summary-dot" aria-hidden="true" />
+            <span>Актуальный список</span>
+          </>
+        ) : (
+          <>
+            <span>{homeworksLabel(weekCardsCount)} на выбранную неделю</span>
+            <span className="summary-dot" aria-hidden="true" />
+            <span>Всего активных: {cards.length}</span>
+          </>
+        )}
       </div>
 
-      <div className="kanban-grid">
-        {columns.map((column) => {
-          const columnCards = cardsByColumn[column.key];
-          return (
-            <section
-              className="kanban-column"
-              key={column.key}
-              aria-label={column.title}
-            >
-              <header className="kanban-column-header">
-                <div>
-                  <h2>{column.title}</h2>
-                  <p>{column.caption}</p>
+      {viewMode === "timeline" ? (
+        <div
+          className="kanban-grid"
+          style={
+            { "--kanban-cols": timelineColumns.length } as React.CSSProperties
+          }
+        >
+          {timelineColumns.map((column) => {
+            const columnCards = cardsByColumn[column.key];
+            return (
+              <section
+                className="kanban-column"
+                key={column.key}
+                aria-label={column.title}
+              >
+                <header className="kanban-column-header">
+                  <div>
+                    <h2>{column.title}</h2>
+                    <p>{column.caption}</p>
+                  </div>
+                  <span
+                    className="count-badge"
+                    aria-label={`${columnCards.length} заданий`}
+                  >
+                    {columnCards.length}
+                  </span>
+                </header>
+                <div className="kanban-card-list">
+                  {columnCards.length ? (
+                    columnCards.map((card) => (
+                      <HomeworkCard key={card.homework.id} card={card} />
+                    ))
+                  ) : (
+                    <p className="kanban-empty">Заданий на этот день нет</p>
+                  )}
                 </div>
-                <span
-                  className="count-badge"
-                  aria-label={`${columnCards.length} заданий`}
-                >
-                  {columnCards.length}
-                </span>
-              </header>
-              <div className="kanban-card-list">
-                {columnCards.length ? (
-                  columnCards.map((card) => (
-                    <HomeworkCard key={card.homework.id} card={card} />
-                  ))
-                ) : (
-                  <p className="kanban-empty">Заданий на этот день нет</p>
-                )}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <div
+          className="kanban-grid is-calendar"
+          style={
+            { "--kanban-cols": calendarColumns.length } as React.CSSProperties
+          }
+        >
+          {calendarColumns.map((column) => {
+            const columnCards = cardsByDay.get(column.date) ?? [];
+            return (
+              <section
+                className={`kanban-column ${column.isToday ? "is-today" : ""}`}
+                key={column.date}
+                aria-label={`${column.title}, ${column.caption}`}
+              >
+                <header className="kanban-column-header">
+                  <div>
+                    <div className="column-title-row">
+                      <h2>{column.title}</h2>
+                      {column.isToday ? (
+                        <span className="today-badge">Сегодня</span>
+                      ) : null}
+                    </div>
+                    <p>{column.caption}</p>
+                  </div>
+                  <span
+                    className="count-badge"
+                    aria-label={`${columnCards.length} заданий`}
+                  >
+                    {columnCards.length}
+                  </span>
+                </header>
+                <div className="kanban-card-list">
+                  {columnCards.length ? (
+                    columnCards.map((card) => (
+                      <HomeworkCard key={card.homework.id} card={card} />
+                    ))
+                  ) : (
+                    <p className="kanban-empty">Заданий на этот день нет</p>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
