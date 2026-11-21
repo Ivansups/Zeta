@@ -29,8 +29,10 @@ QUESTION_STARTS = {
 router = Router(name="questions")
 
 
-def looks_like_question(text: str) -> bool:
+def looks_like_question(text: str | None) -> bool:
     """Heuristically detect a free-form question addressed to the bot."""
+    if not text:
+        return False
     stripped = text.strip()
     if not stripped or stripped.startswith("/"):
         return False
