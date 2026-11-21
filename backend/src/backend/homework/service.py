@@ -120,7 +120,7 @@ class HomeworkService:
             stmt = stmt.where(Homework.group_id == effective_group_id)
 
         effective_subgroup = subgroup
-        if user.role == RoleEnum.STUDENT.value and user.subgroup_number:
+        if effective_subgroup is None and user.role == RoleEnum.STUDENT.value:
             effective_subgroup = user.subgroup_number
 
         if effective_subgroup is not None:
@@ -287,6 +287,15 @@ class HomeworkService:
                 detail="Draft not found or expired",
             )
 
+        if not self._is_privileged_for_group(user, draft.group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Only elder, helper or admin of the group "
+                    "may confirm homework drafts"
+                ),
+            )
+
         hw = Homework(
             group_id=draft.group_id,
             title=draft.subject,
@@ -308,3 +317,35 @@ class HomeworkService:
             deadline=hw.deadline,
             subgroup=hw.subgroup,
         )
+
+    async def cancel_draft(self, user: User, draft_id: str) -> None:
+        """Cancel and remove a draft from database."""
+        try:
+            draft_uuid = uuid.UUID(draft_id)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Draft not found or expired",
+            ) from err
+
+        stmt = select(HomeworkDraft).where(HomeworkDraft.id == draft_uuid)
+        res = await self.session.execute(stmt)
+        draft = res.scalar_one_or_none()
+
+        if not draft:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Draft not found or expired",
+            )
+
+        if not self._is_privileged_for_group(user, draft.group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Only elder, helper or admin of the group "
+                    "may cancel homework drafts"
+                ),
+            )
+
+        await self.session.delete(draft)
+        await self.session.commit()

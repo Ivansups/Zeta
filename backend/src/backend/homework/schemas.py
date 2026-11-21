@@ -74,3 +74,13 @@ class ConfirmedHomeworkResponse(BaseModel):
     deadline: datetime | None = None
     pair_number: int | None = None
     subgroup: int | None = None
+
+
+class HomeworkCancelRequest(BaseModel):
+    telegram_id: int
+    draft_id: str
+
+
+class CancelDraftResponse(BaseModel):
+    status: str = "ok"
+    draft_id: str
