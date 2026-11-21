@@ -35,7 +35,7 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it.each(["/login", "/tg-app"])("keeps %s public", (path) => {
+  it.each(["/login", "/tg-app", "/invite"])("keeps %s public", (path) => {
     const response = proxy(makeRequest(path));
 
     expect(response.headers.get("location")).toBeNull();

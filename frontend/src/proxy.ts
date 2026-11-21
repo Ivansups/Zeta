@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/tg-app"];
+const PUBLIC_PATHS = ["/login", "/tg-app", "/invite"];
 const SKIP_PREFIXES = ["/api", "/_next"];
 
 function isPublic(pathname: string): boolean {
