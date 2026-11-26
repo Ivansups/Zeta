@@ -3,14 +3,21 @@
 import { useEffect, useState } from "react";
 
 import { useToast } from "@/components/ui/toast";
-import { api, type ApiInvite, type ApiUser } from "@/lib/api";
+import {
+  api,
+  type ApiGroup,
+  type ApiGroupAdminSummary,
+  type ApiInvite,
+  type ApiUser,
+} from "@/lib/api";
 import type { Student, Subgroup } from "@/lib/types";
 
+import { AllGroupsCard } from "./admin/all-groups-card";
 import { CreateGroupCard } from "./admin/create-group-card";
 import { InviteCard, type Invitation } from "./admin/invite-card";
 import { StudentsList } from "./admin/students-list";
 
-type Tab = "invites" | "students" | "create_group";
+type Tab = "invites" | "students" | "create_group" | "all_groups";
 
 const COLORS = ["blue", "green", "coral", "violet"] as const;
 
@@ -73,6 +80,9 @@ export function AdminPanel(): React.JSX.Element {
   );
   const [canManage, setCanManage] = useState(false);
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
+  const [adminGroups, setAdminGroups] = useState<ApiGroupAdminSummary[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [helperGroups, setHelperGroups] = useState<ApiGroup[]>([]);
 
   useEffect(() => {
     async function loadData(): Promise<void> {
@@ -80,12 +90,22 @@ export function AdminPanel(): React.JSX.Element {
       if (!user) return;
       setCurrentUser(user);
 
-      if (!user.group_id) {
+      if (user.role === "admin") {
+        setCanManage(true);
+        setActiveTab("all_groups");
+        const groups = await api.listAdminGroups().catch(() => [] as ApiGroupAdminSummary[]);
+        setAdminGroups(groups);
+      } else if (!user.group_id) {
         setActiveTab("create_group");
         return;
+      } else {
+        setActiveTab("invites");
       }
 
-      setActiveTab("invites");
+      if (user.role === "helper") {
+        const myHelpers = await api.listMyHelperGroups().catch(() => [] as ApiGroup[]);
+        setHelperGroups(myHelpers);
+      }
 
       if (user.role !== "elder" && user.role !== "admin") {
         return;
@@ -259,9 +279,41 @@ export function AdminPanel(): React.JSX.Element {
     }
   }
 
+  async function handleSelectGroup(groupId: string): Promise<void> {
+    setSelectedGroupId(groupId);
+    showToast("Выбрана активная группа для управления");
+  }
+
+  async function handleSetElder(groupId: string, userId: string): Promise<void> {
+    try {
+      await api.setGroupElder(groupId, userId);
+      const updated = await api.listAdminGroups();
+      setAdminGroups(updated);
+      showToast("Староста группы успешно назначен");
+    } catch {
+      showToast("Не удалось назначить старосту");
+    }
+  }
+
+  const isAdmin = currentUser?.role === "admin";
+
   return (
     <div>
       <div className="admin-tabs" role="tablist" aria-label="Управление группой">
+        {isAdmin ? (
+          <button
+            className={`admin-tab-btn${activeTab === "all_groups" ? " is-active" : ""}`}
+            id="all-groups-tab"
+            type="button"
+            role="tab"
+            aria-controls="all-groups-panel"
+            aria-selected={activeTab === "all_groups"}
+            onClick={() => setActiveTab("all_groups")}
+          >
+            Все группы
+            {activeTab === "all_groups" ? <span className="admin-tab-indicator" aria-hidden="true" /> : null}
+          </button>
+        ) : null}
         <button
           className={`admin-tab-btn${activeTab === "invites" ? " is-active" : ""}`}
           id="invites-tab"
@@ -302,7 +354,45 @@ export function AdminPanel(): React.JSX.Element {
         ) : null}
       </div>
 
-      {activeTab === "create_group" && showCreateGroupTab ? (
+      {helperGroups.length > 0 ? (
+        <div
+          style={{
+            marginBottom: "1rem",
+            padding: "0.5rem 0.75rem",
+            backgroundColor: "var(--color-surface)",
+            borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--color-border)",
+            fontSize: "0.85rem",
+          }}
+        >
+          <strong>Вы назначены хелпером в группах: </strong>
+          {helperGroups.map((g) => (
+            <span
+              key={g.id}
+              style={{
+                marginLeft: "0.5rem",
+                padding: "2px 8px",
+                backgroundColor: "var(--color-surface-hover)",
+                borderRadius: "4px",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              {g.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {activeTab === "all_groups" && isAdmin ? (
+        <div id="all-groups-panel" role="tabpanel" aria-labelledby="all-groups-tab">
+          <AllGroupsCard
+            groups={adminGroups}
+            activeGroupId={selectedGroupId || currentUser?.group_id || null}
+            onSelectGroup={handleSelectGroup}
+            onSetElder={handleSetElder}
+          />
+        </div>
+      ) : activeTab === "create_group" && showCreateGroupTab ? (
         <div id="create-group-panel" role="tabpanel" aria-labelledby="create-group-tab">
           <CreateGroupCard onSuccess={handleGroupCreated} />
         </div>

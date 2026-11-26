@@ -38,6 +38,17 @@ export type ApiGroup = {
   created_at: string;
 };
 
+export type ApiGroupAdminSummary = {
+  id: string;
+  name: string;
+  faculty?: string | null;
+  university?: string | null;
+  created_at: string;
+  elder?: ApiUser | null;
+  helpers: ApiUser[];
+  students_count: number;
+};
+
 export type ApiHomeworkInput = {
   title?: string;
   description: string;
@@ -292,5 +303,48 @@ export const api = {
       jsonInit("PATCH", { role }),
     );
     return handleResponse<ApiUser>(res);
+  },
+
+  async listAdminGroups(): Promise<ApiGroupAdminSummary[]> {
+    const res = await request("/api/auth/admin/groups", { method: "GET" });
+    return handleResponse<ApiGroupAdminSummary[]>(res);
+  },
+
+  async setGroupElder(groupId: string, userId: string): Promise<ApiUser> {
+    const res = await request(
+      `/api/auth/admin/groups/${groupId}/elder`,
+      jsonInit("PATCH", { user_id: userId }),
+    );
+    return handleResponse<ApiUser>(res);
+  },
+
+  async listGroupHelpers(groupId: string): Promise<ApiUser[]> {
+    const res = await request(`/api/auth/groups/${groupId}/helpers`, { method: "GET" });
+    return handleResponse<ApiUser[]>(res);
+  },
+
+  async addGroupHelper(groupId: string, userId: string): Promise<void> {
+    const res = await request(
+      `/api/auth/groups/${groupId}/helpers`,
+      jsonInit("POST", { user_id: userId }),
+    );
+    if (!res.ok) {
+      throw new Error(`Failed to add helper: ${res.status}`);
+    }
+  },
+
+  async removeGroupHelper(groupId: string, userId: string): Promise<void> {
+    const res = await request(
+      `/api/auth/groups/${groupId}/helpers/${userId}`,
+      { method: "DELETE" },
+    );
+    if (!res.ok) {
+      throw new Error(`Failed to remove helper: ${res.status}`);
+    }
+  },
+
+  async listMyHelperGroups(): Promise<ApiGroup[]> {
+    const res = await request("/api/auth/users/me/helper-groups", { method: "GET" });
+    return handleResponse<ApiGroup[]>(res);
   },
 };

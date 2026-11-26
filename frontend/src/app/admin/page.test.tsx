@@ -15,6 +15,12 @@ jest.mock("@/lib/api", () => ({
     listUsers: jest.fn(),
     setUserRole: jest.fn(),
     createGroup: jest.fn(),
+    listAdminGroups: jest.fn(),
+    setGroupElder: jest.fn(),
+    listGroupHelpers: jest.fn(),
+    addGroupHelper: jest.fn(),
+    removeGroupHelper: jest.fn(),
+    listMyHelperGroups: jest.fn(),
   },
 }));
 
@@ -49,6 +55,11 @@ describe("AdminPage", () => {
       university: "МГТУ",
       created_at: "2026-11-21T00:00:00Z",
     });
+    mockedApi.listAdminGroups.mockResolvedValue([]);
+    mockedApi.listMyHelperGroups.mockResolvedValue([]);
+    mockedApi.setGroupElder.mockResolvedValue(
+      apiUser({ id: "user-alina", role: "elder" }),
+    );
   });
 
   afterEach(() => {
@@ -202,6 +213,63 @@ describe("AdminPage", () => {
     });
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Группа «IU5-11B» успешно создана! Вы назначены старостой.",
+    );
+  });
+
+  it("shows all_groups tab for admin and allows switching active group context and appointing elder", async () => {
+    mockedApi.getMe.mockResolvedValue(
+      apiUser({ id: "admin-1", role: "admin", display_name: "Иван Суперадмин" }),
+    );
+    mockedApi.listAdminGroups.mockResolvedValue([
+      {
+        id: "group-1",
+        name: "ИУ5-11Б",
+        faculty: "ИУ",
+        university: "МГТУ",
+        created_at: "2026-11-20T00:00:00Z",
+        elder: apiUser({ id: "elder-1", role: "elder", display_name: "Староста Иван" }),
+        helpers: [apiUser({ id: "helper-1", role: "helper", display_name: "Хелпер Петр" })],
+        students_count: 25,
+      },
+      {
+        id: "group-2",
+        name: "ИУ5-12Б",
+        faculty: "ИУ",
+        university: "МГТУ",
+        created_at: "2026-11-20T00:00:00Z",
+        elder: null,
+        helpers: [],
+        students_count: 22,
+      },
+    ]);
+
+    const user = userEvent.setup();
+    render(<AdminPage />);
+
+    expect(await screen.findByRole("tab", { name: "Все группы" })).toBeInTheDocument();
+    expect(await screen.findByText("ИУ5-11Б")).toBeInTheDocument();
+    expect(await screen.findByText("ИУ5-12Б")).toBeInTheDocument();
+    expect(screen.getByText("Староста Иван")).toBeInTheDocument();
+    expect(screen.getByText("Хелпер Петр")).toBeInTheDocument();
+
+    // Select group 2
+    const manageBtn = screen.getByRole("button", { name: "Выбрать группу ИУ5-12Б" });
+    await user.click(manageBtn);
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Выбрана активная группа для управления",
+    );
+
+    // Appoint elder
+    const changeElderBtn = screen.getByRole("button", { name: "Сменить старосту ИУ5-12Б" });
+    await user.click(changeElderBtn);
+
+    const input = screen.getByLabelText("UUID нового старосты");
+    await user.type(input, "student-uuid-123");
+    await user.click(screen.getByRole("button", { name: "Назначить" }));
+
+    expect(mockedApi.setGroupElder).toHaveBeenCalledWith("group-2", "student-uuid-123");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Староста группы успешно назначен",
     );
   });
 });
