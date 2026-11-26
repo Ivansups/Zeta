@@ -2,7 +2,7 @@
 
 Система учёта домашних заданий студентов ФКН: централизованный сбор, хранение и просмотр ДЗ, привязанных к парам расписания. Расписание берётся из Excel-таблицы на Яндекс.Диске. Вход только по приглашению, идентичность — `telegram_id`.
 
-Требования — [docs/Task.md](docs/Task.md), план и расписание — [docs/Roadmap.md](docs/Roadmap.md), документация по этапам — [docs/README.md](docs/README.md). Правила работы для разработчиков и AI-агентов — [AGENTS.md](AGENTS.md).
+Требования — [docs/Task.md](docs/Task.md), план и расписание — [docs/Roadmap.md](docs/Roadmap.md), документация по этапам — [docs/README.md](docs/README.md), приёмочные материалы — [docs/stage2/приёмочные-материалы/](docs/stage2/приёмочные-материалы/). Правила работы для разработчиков и AI-агентов — [AGENTS.md](AGENTS.md).
 
 ## Структура репозитория
 
@@ -139,7 +139,28 @@ erDiagram
 
 ## Быстрый старт
 
-Нужны: `uv`, Node.js 24 с `pnpm`, Docker. Запуск каждого пакета описан в его README.
+### 1. Запуск всего стека в Docker Compose (рекомендуется)
+
+Для локального запуска всех сервисов (`zeta-db`, `zeta-backend`, `zeta-frontend`, `zeta-bot`) достаточно установленного Docker Engine:
+
+```bash
+# Сборка и запуск контейнеров в фоновом режиме
+docker compose up -d --build
+
+# Проверка статуса сервисов и healthcheck
+docker compose ps
+
+# Применение миграций базы данных (если не применились автоматически)
+docker compose exec backend uv run alembic upgrade head
+```
+
+- Веб-приложение: [http://localhost:3000](http://localhost:3000)
+- OpenAPI Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Healthcheck: [http://localhost:8000/health](http://localhost:8000/health)
+
+### 2. Запуск сервисов по отдельности (Dev-режим)
+
+Нужны: `uv`, Node.js 24 с `pnpm`, Docker. Запуск каждого пакета подробно описан в его README.
 
 ```bash
 # backend + PostgreSQL
@@ -153,6 +174,10 @@ cd mobile && pnpm install && pnpm start
 # telegram-bot
 cd telegram-bot && uv sync
 ```
+
+### 3. Развёртывание в продакшен
+
+Инструкции по боевому развёртыванию на VPS под управлением **Coolify 4** и **Traefik**, настройке секретов окружения, автоматическому CI/CD деплою через GitHub Webhook и смоук-тестам вынесены в [docs/deploy.md](docs/deploy.md).
 
 ## Проверки
 
