@@ -7,11 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth.models import (
     AuditLog,
     Group,
+    GroupHelper,
     InviteToken,
     RefreshToken,
     RoleEnum,
     User,
 )
+from backend.auth.schemas import GroupAdminSummaryResponse, UserResponse
 from backend.auth.security import create_access_token, generate_random_token, hash_token
 
 
@@ -19,7 +21,7 @@ class AuthService:
     def __init__(
         self,
         session: AsyncSession,
-        jwt_secret_key: str,
+        jwt_secret_key: str = "",
         jwt_algorithm: str = "HS256",
         access_token_expire_minutes: int = 15,
         refresh_token_expire_days: int = 30,
@@ -475,3 +477,181 @@ class AuthService:
         )
         self.session.add(audit)
         await self.session.commit()
+
+    async def list_all_groups_summary(
+        self, actor: User
+    ) -> list[GroupAdminSummaryResponse]:
+        """List all groups with summary for superadmin."""
+        if actor.role != RoleEnum.ADMIN.value:
+            raise PermissionError("Admin role required")
+
+        groups_res = await self.session.execute(
+            select(Group).order_by(Group.name.asc())
+        )
+        groups = list(groups_res.scalars().all())
+
+        users_res = await self.session.execute(select(User))
+        all_users = list(users_res.scalars().all())
+
+        helpers_res = await self.session.execute(select(GroupHelper))
+        all_helpers = list(helpers_res.scalars().all())
+
+        user_by_id = {u.id: u for u in all_users}
+
+        summaries: list[GroupAdminSummaryResponse] = []
+        for grp in groups:
+            members = [u for u in all_users if u.group_id == grp.id]
+            elder = next((u for u in members if u.role == RoleEnum.ELDER.value), None)
+
+            helper_users_dict: dict[uuid.UUID, User] = {
+                u.id: u for u in members if u.role == RoleEnum.HELPER.value
+            }
+            for gh in all_helpers:
+                if gh.group_id == grp.id and gh.user_id in user_by_id:
+                    helper_users_dict[gh.user_id] = user_by_id[gh.user_id]
+
+            summaries.append(
+                GroupAdminSummaryResponse(
+                    id=grp.id,
+                    name=grp.name,
+                    faculty=grp.faculty,
+                    university=grp.university,
+                    created_at=grp.created_at,
+                    elder=UserResponse.model_validate(elder) if elder else None,
+                    helpers=[
+                        UserResponse.model_validate(h)
+                        for h in helper_users_dict.values()
+                    ],
+                    students_count=len(members),
+                )
+            )
+        return summaries
+
+    async def set_group_elder(
+        self, actor: User, group_id: uuid.UUID, user_id: uuid.UUID
+    ) -> User:
+        """Assign or replace the elder of a group directly (admin action)."""
+        if actor.role != RoleEnum.ADMIN.value:
+            raise PermissionError("Admin role required")
+
+        user_stmt = select(User).where(User.id == user_id).with_for_update()
+        target = (await self.session.execute(user_stmt)).scalar_one_or_none()
+        if not target:
+            raise LookupError("User not found")
+
+        old_elders_stmt = select(User).where(
+            User.group_id == group_id, User.role == RoleEnum.ELDER.value
+        )
+        old_elders_res = (await self.session.execute(old_elders_stmt)).scalars()
+        old_elders = (
+            list(old_elders_res.all())
+            if hasattr(old_elders_res, "all")
+            else list(old_elders_res)
+        )
+        for old in old_elders:
+            if old.id != target.id:
+                old.role = RoleEnum.STUDENT.value
+
+        target.role = RoleEnum.ELDER.value
+        target.group_id = group_id
+        target.token_version = (target.token_version or 0) + 1
+
+        self.session.add(
+            AuditLog(
+                user_id=actor.id,
+                event="ADMIN_SET_ELDER",
+                details=f"Assigned user {user_id} as elder of group {group_id}",
+            )
+        )
+        await self.session.commit()
+        return target
+
+    async def add_group_helper(
+        self, actor: User, group_id: uuid.UUID, user_id: uuid.UUID
+    ) -> GroupHelper:
+        """Assign a student to be a helper for a specific group."""
+        if actor.role != RoleEnum.ADMIN.value and (
+            actor.role != RoleEnum.ELDER.value or actor.group_id != group_id
+        ):
+            raise PermissionError("Only group elder or admin may add helpers")
+
+        user_stmt = select(User).where(User.id == user_id)
+        user = (await self.session.execute(user_stmt)).scalar_one_or_none()
+        if not user:
+            raise LookupError("User not found")
+
+        existing_stmt = select(GroupHelper).where(
+            GroupHelper.group_id == group_id, GroupHelper.user_id == user_id
+        )
+        existing = (await self.session.execute(existing_stmt)).scalar_one_or_none()
+        if existing:
+            return existing
+
+        helper_link = GroupHelper(group_id=group_id, user_id=user_id)
+        self.session.add(helper_link)
+        self.session.add(
+            AuditLog(
+                user_id=actor.id,
+                event="HELPER_ADD",
+                details=f"Added user {user_id} as helper to group {group_id}",
+            )
+        )
+        await self.session.commit()
+        return helper_link
+
+    async def remove_group_helper(
+        self, actor: User, group_id: uuid.UUID, user_id: uuid.UUID
+    ) -> None:
+        """Remove a helper from a group."""
+        if actor.role != RoleEnum.ADMIN.value and (
+            actor.role != RoleEnum.ELDER.value or actor.group_id != group_id
+        ):
+            raise PermissionError("Only group elder or admin may remove helpers")
+
+        stmt = select(GroupHelper).where(
+            GroupHelper.group_id == group_id, GroupHelper.user_id == user_id
+        )
+        helper_link = (await self.session.execute(stmt)).scalar_one_or_none()
+        if helper_link:
+            await self.session.delete(helper_link)
+            self.session.add(
+                AuditLog(
+                    user_id=actor.id,
+                    event="HELPER_REMOVE",
+                    details=f"Removed user {user_id} from group {group_id} helpers",
+                )
+            )
+            await self.session.commit()
+
+    async def list_group_helpers(self, group_id: uuid.UUID) -> list[User]:
+        """List all helpers for a group (native + cross-group helpers)."""
+        members_stmt = select(User).where(
+            User.group_id == group_id, User.role == RoleEnum.HELPER.value
+        )
+        members = list((await self.session.execute(members_stmt)).scalars().all())
+
+        links_stmt = select(GroupHelper).where(GroupHelper.group_id == group_id)
+        links = list((await self.session.execute(links_stmt)).scalars().all())
+        link_user_ids = [
+            lnk.user_id for lnk in links if lnk.user_id not in {m.id for m in members}
+        ]
+
+        if link_user_ids:
+            extra_users_stmt = select(User).where(User.id.in_(link_user_ids))
+            extra_users = list(
+                (await self.session.execute(extra_users_stmt)).scalars().all()
+            )
+            members.extend(extra_users)
+
+        return members
+
+    async def list_user_helper_groups(self, user: User) -> list[Group]:
+        """List groups where user is linked as a helper."""
+        stmt = (
+            select(Group)
+            .join(GroupHelper, GroupHelper.group_id == Group.id)
+            .where(GroupHelper.user_id == user.id)
+            .order_by(Group.name.asc())
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())

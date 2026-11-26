@@ -29,7 +29,11 @@ from backend.auth.schemas import (
     BotUserResponse,
     DevLoginRequest,
     ElderInviteCreateRequest,
+    GroupAdminSummaryResponse,
     GroupCreateRequest,
+    GroupElderUpdateRequest,
+    GroupHelperAddRequest,
+    GroupHelperResponse,
     GroupResponse,
     InviteResponse,
     JoinGroupRequest,
@@ -407,6 +411,97 @@ async def leave_group(
     resp = UserResponse.model_validate(user)
     resp.group_name = None
     return resp
+
+
+@router.get("/admin/groups", response_model=list[GroupAdminSummaryResponse])
+async def list_admin_groups(
+    current_user: RequireAdmin,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> list[GroupAdminSummaryResponse]:
+    """List all groups with summary for superadmin."""
+    return await service.list_all_groups_summary(actor=current_user)
+
+
+@router.patch("/admin/groups/{group_id}/elder", response_model=UserResponse)
+async def set_group_elder(
+    group_id: uuid.UUID,
+    payload: GroupElderUpdateRequest,
+    current_user: RequireAdmin,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> UserResponse:
+    """Directly assign or replace the elder of a group (admin only)."""
+    try:
+        user = await service.set_group_elder(
+            actor=current_user, group_id=group_id, user_id=payload.user_id
+        )
+    except LookupError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(err)
+        ) from err
+    return UserResponse.model_validate(user)
+
+
+@router.get("/groups/{group_id}/helpers", response_model=list[UserResponse])
+async def list_group_helpers(
+    group_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> list[UserResponse]:
+    """List helpers for a group."""
+    users = await service.list_group_helpers(group_id=group_id)
+    return [UserResponse.model_validate(u) for u in users]
+
+
+@router.post("/groups/{group_id}/helpers", response_model=GroupHelperResponse)
+async def add_group_helper(
+    group_id: uuid.UUID,
+    payload: GroupHelperAddRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> GroupHelperResponse:
+    """Add a helper to a group (group elder or admin only)."""
+    try:
+        link = await service.add_group_helper(
+            actor=current_user, group_id=group_id, user_id=payload.user_id
+        )
+    except PermissionError as err:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(err)
+        ) from err
+    except LookupError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(err)
+        ) from err
+    return GroupHelperResponse.model_validate(link)
+
+
+@router.delete("/groups/{group_id}/helpers/{user_id}")
+async def remove_group_helper(
+    group_id: uuid.UUID,
+    user_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> dict[str, str]:
+    """Remove a helper from a group (group elder or admin only)."""
+    try:
+        await service.remove_group_helper(
+            actor=current_user, group_id=group_id, user_id=user_id
+        )
+    except PermissionError as err:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(err)
+        ) from err
+    return {"status": "removed"}
+
+
+@router.get("/users/me/helper-groups", response_model=list[GroupResponse])
+async def list_my_helper_groups(
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> list[GroupResponse]:
+    """List groups where current user is connected as helper."""
+    groups = await service.list_user_helper_groups(user=current_user)
+    return [GroupResponse.model_validate(g) for g in groups]
 
 
 @router.post("/invites/elder", response_model=InviteResponse)

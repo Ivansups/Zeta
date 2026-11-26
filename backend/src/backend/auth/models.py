@@ -2,7 +2,16 @@ import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,6 +53,9 @@ class Group(Base):
     invite_tokens: Mapped[list["InviteToken"]] = relationship(
         "InviteToken", back_populates="group"
     )
+    group_helpers: Mapped[list["GroupHelper"]] = relationship(
+        "GroupHelper", back_populates="group", cascade="all, delete-orphan"
+    )
 
 
 class User(Base):
@@ -73,6 +85,9 @@ class User(Base):
     group: Mapped[Group | None] = relationship("Group", back_populates="users")
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    )
+    helper_groups: Mapped[list["GroupHelper"]] = relationship(
+        "GroupHelper", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -149,3 +164,34 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
+
+
+class GroupHelper(Base):
+    __tablename__ = "group_helpers"
+    __table_args__ = (
+        UniqueConstraint(
+            "group_id", "user_id", name="uq_group_helpers_group_id_user_id"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    group_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("groups.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    group: Mapped[Group] = relationship("Group", back_populates="group_helpers")
+    user: Mapped[User] = relationship("User", back_populates="helper_groups")

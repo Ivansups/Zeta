@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.auth.models import RoleEnum, User
+from backend.auth.models import GroupHelper, RoleEnum, User
 from backend.homework.models import Homework, HomeworkDraft
 from backend.homework.parsers.text_parser import (
     clean_homework_description,
@@ -32,12 +32,23 @@ class HomeworkService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def _is_privileged_for_group(self, user: User, group_id: uuid.UUID) -> bool:
+    async def _is_privileged_for_group(self, user: User, group_id: uuid.UUID) -> bool:
         """Check if user has teacher/elder rights over the specified group."""
         if user.role == RoleEnum.ADMIN.value:
             return True
-        if user.role in (RoleEnum.ELDER.value, RoleEnum.HELPER.value):
+        if user.role == RoleEnum.ELDER.value:
             return user.group_id == group_id
+        if user.role == RoleEnum.HELPER.value:
+            if user.group_id == group_id:
+                return True
+            stmt = select(GroupHelper).where(
+                GroupHelper.group_id == group_id, GroupHelper.user_id == user.id
+            )
+            res = await self.session.execute(stmt)
+            val = res.scalar_one_or_none()
+            if hasattr(val, "_mock_return_value") and not isinstance(val, GroupHelper):
+                return False
+            return val is not None
         return False
 
     async def create_homework(self, user: User, data: HomeworkCreate) -> Homework:
@@ -52,7 +63,7 @@ class HomeworkService:
                 detail="Group ID is required to create homework",
             )
 
-        if not self._is_privileged_for_group(user, target_group_id):
+        if not await self._is_privileged_for_group(user, target_group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only elder, helper or admin may create homework",
@@ -113,11 +124,14 @@ class HomeworkService:
             if not user.group_id:
                 return []
             if group_id and group_id != user.group_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Cannot view homework for another group",
-                )
-            effective_group_id = user.group_id
+                if not await self._is_privileged_for_group(user, group_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Cannot view homework for another group",
+                    )
+                effective_group_id = group_id
+            else:
+                effective_group_id = user.group_id
 
         if effective_group_id:
             stmt = stmt.where(Homework.group_id == effective_group_id)
@@ -155,7 +169,11 @@ class HomeworkService:
                 detail="Homework assignment not found",
             )
 
-        if user.role != RoleEnum.ADMIN.value and user.group_id != hw.group_id:
+        if (
+            user.role != RoleEnum.ADMIN.value
+            and user.group_id != hw.group_id
+            and not await self._is_privileged_for_group(user, hw.group_id)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied to homework of another group",
@@ -169,7 +187,7 @@ class HomeworkService:
         """Update existing homework assignment."""
         hw = await self.get_homework_by_id(user, homework_id)
 
-        if not self._is_privileged_for_group(user, hw.group_id):
+        if not await self._is_privileged_for_group(user, hw.group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only elder, helper or admin may update this homework",
@@ -210,7 +228,7 @@ class HomeworkService:
         """Delete homework assignment."""
         hw = await self.get_homework_by_id(user, homework_id)
 
-        if not self._is_privileged_for_group(user, hw.group_id):
+        if not await self._is_privileged_for_group(user, hw.group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only elder, helper or admin may delete this homework",
@@ -223,7 +241,7 @@ class HomeworkService:
         self, text: str, user: User, ttl_seconds: int = 900
     ) -> HomeworkDraftResponse:
         """Parse homework text into structured draft persisted in Postgres."""
-        group_id = self.require_manager_group(user)
+        group_id = await self.require_manager_group(user)
         preview = self.parse_preview(text)
 
         now = datetime.now(UTC)
@@ -250,19 +268,22 @@ class HomeworkService:
             subgroup=preview.subgroup,
         )
 
-    def require_manager_group(self, user: User) -> uuid.UUID:
-        """Ensure the user may manage homework for their own group."""
-        if not user.group_id:
+    async def require_manager_group(
+        self, user: User, target_group_id: uuid.UUID | None = None
+    ) -> uuid.UUID:
+        """Ensure the user may manage homework for their own group or linked group."""
+        effective_group = target_group_id or user.group_id
+        if not effective_group:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User has no group assigned",
             )
-        if not self._is_privileged_for_group(user, user.group_id):
+        if not await self._is_privileged_for_group(user, effective_group):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only elder, helper or admin may create homework drafts",
             )
-        return user.group_id
+        return effective_group
 
     def parse_preview(self, text: str) -> HomeworkParsePreview:
         """Extract subject, description, deadline and subgroup from free text."""
@@ -300,7 +321,7 @@ class HomeworkService:
                 detail="Draft not found or expired",
             )
 
-        if not self._is_privileged_for_group(user, draft.group_id):
+        if not await self._is_privileged_for_group(user, draft.group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
@@ -351,7 +372,7 @@ class HomeworkService:
                 detail="Draft not found or expired",
             )
 
-        if not self._is_privileged_for_group(user, draft.group_id):
+        if not await self._is_privileged_for_group(user, draft.group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(

@@ -111,3 +111,34 @@ class BotUserResponse(BaseModel):
     role: str
     group_id: str | None = None
     subgroup: int | None = None
+
+
+class GroupAdminSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    faculty: str | None = None
+    university: str | None = None
+    created_at: datetime
+    elder: UserResponse | None = None
+    helpers: list[UserResponse] = Field(default_factory=list)
+    students_count: int = 0
+
+
+class GroupElderUpdateRequest(BaseModel):
+    user_id: uuid.UUID
+
+
+class GroupHelperAddRequest(BaseModel):
+    user_id: uuid.UUID
+
+
+class GroupHelperResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    group_id: uuid.UUID
+    user_id: uuid.UUID
+    created_at: datetime
+    user: UserResponse | None = None

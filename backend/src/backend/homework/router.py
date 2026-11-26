@@ -89,7 +89,7 @@ async def parse_homework_for_web(
 ) -> HomeworkParsePreview:
     """Parse free-form text for the web editor without persisting a draft."""
     service = HomeworkService(session=session)
-    service.require_manager_group(current_user)
+    await service.require_manager_group(current_user)
     return service.parse_preview(payload.text)
 
 
