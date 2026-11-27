@@ -86,6 +86,14 @@ class JoinGroupRequest(BaseModel):
     token: str = Field(..., min_length=1)
 
 
+class InvitePreviewResponse(BaseModel):
+    group_id: uuid.UUID | None = None
+    group_name: str
+    subgroup_number: int | None = None
+    role: str
+    elder_name: str | None = None
+
+
 class InviteResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
