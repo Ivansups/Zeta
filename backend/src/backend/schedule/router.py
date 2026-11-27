@@ -9,14 +9,20 @@ import openpyxl
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth.dependencies import RequireAdmin
+from backend.auth.dependencies import RequireHelper
 from backend.db.session import get_session
 from backend.schedule.db_models import SchedulePair
 from backend.schedule.dependencies import get_llm_fallback_service
 from backend.schedule.excel_parser import ScheduleExcelParser, ScheduleStructureError
 from backend.schedule.llm_fallback import LLMFallbackService
 from backend.schedule.models import ScheduleParseResult
-from backend.schedule.schemas import ScheduleImportResponse, SchedulePairRead
+from backend.schedule.permissions import assert_can_manage_group_schedule
+from backend.schedule.schemas import (
+    ScheduleImportResponse,
+    SchedulePairCreate,
+    SchedulePairRead,
+    SchedulePairUpdate,
+)
 from backend.schedule.service import ScheduleStorageService
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
@@ -50,7 +56,7 @@ def _map_pair_to_read(pair: SchedulePair) -> SchedulePairRead:
 
 @router.post("/parse", response_model=ScheduleParseResult)
 async def parse_schedule_workbook(
-    _: RequireAdmin,
+    _: RequireHelper,
     file: Annotated[UploadFile, File(description="Excel timetable (.xlsx)")],
     llm_service: Annotated[LLMFallbackService, Depends(get_llm_fallback_service)],
 ) -> ScheduleParseResult:
@@ -84,7 +90,7 @@ async def parse_schedule_workbook(
 
 @router.post("/import", response_model=ScheduleImportResponse)
 async def import_schedule_workbook(
-    _: RequireAdmin,
+    _: RequireHelper,
     file: Annotated[UploadFile, File(description="Excel timetable (.xlsx)")],
     llm_service: Annotated[LLMFallbackService, Depends(get_llm_fallback_service)],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -182,3 +188,73 @@ async def get_week_schedule(
         week_parity=parity,
     )
     return [_map_pair_to_read(p) for p in pairs]
+
+
+@router.post(
+    "/pairs",
+    response_model=SchedulePairRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_schedule_pair(
+    data: SchedulePairCreate,
+    current_user: RequireHelper,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> SchedulePairRead:
+    """Add a new lesson pair to the schedule."""
+    target_group_id = data.group_id or current_user.group_id
+    if not target_group_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="group_id must be provided or user must be assigned to a group",
+        )
+
+    await assert_can_manage_group_schedule(current_user, target_group_id, session)
+
+    storage_service = ScheduleStorageService(session=session)
+    pair = await storage_service.create_pair(group_id=target_group_id, data=data)
+    # Ensure group relation is loaded for response
+    loaded_pair = await storage_service.get_pair(pair.id)
+    return _map_pair_to_read(loaded_pair or pair)
+
+
+@router.patch("/pairs/{pair_id}", response_model=SchedulePairRead)
+async def update_schedule_pair(
+    pair_id: uuid.UUID,
+    data: SchedulePairUpdate,
+    current_user: RequireHelper,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> SchedulePairRead:
+    """Update details of an existing schedule pair."""
+    storage_service = ScheduleStorageService(session=session)
+    pair = await storage_service.get_pair(pair_id)
+    if not pair:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule pair not found",
+        )
+
+    await assert_can_manage_group_schedule(current_user, pair.group_id, session)
+
+    updated = await storage_service.update_pair(pair=pair, data=data)
+    return _map_pair_to_read(updated)
+
+
+@router.delete("/pairs/{pair_id}", status_code=status.HTTP_200_OK)
+async def delete_schedule_pair(
+    pair_id: uuid.UUID,
+    current_user: RequireHelper,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, str]:
+    """Delete a schedule pair by ID."""
+    storage_service = ScheduleStorageService(session=session)
+    pair = await storage_service.get_pair(pair_id)
+    if not pair:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule pair not found",
+        )
+
+    await assert_can_manage_group_schedule(current_user, pair.group_id, session)
+
+    await storage_service.delete_pair(pair=pair)
+    return {"status": "deleted", "id": str(pair_id)}

@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from backend.auth.models import Group
 from backend.schedule.db_models import SchedulePair
 from backend.schedule.models import ParsedLesson, WeekParity
+from backend.schedule.schemas import SchedulePairCreate, SchedulePairUpdate
 
 
 class ScheduleStorageService:
@@ -173,3 +174,83 @@ class ScheduleStorageService:
             subgroup=subgroup,
             week_parity=week_parity,
         )
+
+    async def create_pair(
+        self, group_id: uuid.UUID, data: SchedulePairCreate
+    ) -> SchedulePair:
+        """Create and save a single schedule pair."""
+        notes_str = ", ".join(data.notes) if data.notes else None
+        pair = SchedulePair(
+            group_id=group_id,
+            subgroup=data.subgroup,
+            day_of_week=data.day_of_week.strip(),
+            pair_number=data.pair_number,
+            start_time=data.start_time.strip(),
+            end_time=data.end_time.strip(),
+            week_parity=data.week_parity.lower(),
+            subject=data.subject.strip(),
+            subject_id=data.subject_id,
+            teacher=data.teacher,
+            teacher_title=data.teacher_title,
+            room=data.room,
+            building=data.building,
+            is_online=data.is_online,
+            lesson_type=data.lesson_type,
+            notes=notes_str,
+        )
+        self.session.add(pair)
+        await self.session.commit()
+        return pair
+
+    async def get_pair(self, pair_id: uuid.UUID) -> SchedulePair | None:
+        """Fetch a single pair by primary key with its group relationship."""
+        stmt = (
+            select(SchedulePair)
+            .options(selectinload(SchedulePair.group))
+            .where(SchedulePair.id == pair_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def update_pair(
+        self, pair: SchedulePair, data: SchedulePairUpdate
+    ) -> SchedulePair:
+        """Apply partial updates to an existing timetable pair."""
+        if data.day_of_week is not None:
+            pair.day_of_week = data.day_of_week.strip()
+        if data.pair_number is not None:
+            pair.pair_number = data.pair_number
+        if data.start_time is not None:
+            pair.start_time = data.start_time.strip()
+        if data.end_time is not None:
+            pair.end_time = data.end_time.strip()
+        if data.week_parity is not None:
+            pair.week_parity = data.week_parity.lower()
+        if data.subgroup is not None or "subgroup" in data.model_fields_set:
+            pair.subgroup = data.subgroup
+        if data.subject is not None:
+            pair.subject = data.subject.strip()
+        if data.subject_id is not None or "subject_id" in data.model_fields_set:
+            pair.subject_id = data.subject_id
+        if data.teacher is not None or "teacher" in data.model_fields_set:
+            pair.teacher = data.teacher
+        if data.teacher_title is not None or "teacher_title" in data.model_fields_set:
+            pair.teacher_title = data.teacher_title
+        if data.room is not None or "room" in data.model_fields_set:
+            pair.room = data.room
+        if data.building is not None or "building" in data.model_fields_set:
+            pair.building = data.building
+        if data.is_online is not None:
+            pair.is_online = data.is_online
+        if data.lesson_type is not None:
+            pair.lesson_type = data.lesson_type
+        if data.notes is not None:
+            pair.notes = ", ".join(data.notes) if data.notes else None
+
+        await self.session.commit()
+        return pair
+
+    async def delete_pair(self, pair: SchedulePair) -> None:
+        """Delete a single schedule pair."""
+        await self.session.delete(pair)
+        await self.session.commit()

@@ -1,9 +1,15 @@
 "use client";
 
-import { BookOpen, ChevronRight, Plus, Sparkles } from "lucide-react";
+import { BookOpen, ChevronRight, FileSpreadsheet, Plus, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { api, type ApiHomework, type ApiSchedulePair } from "@/lib/api";
+import {
+  api,
+  type ApiHomework,
+  type ApiSchedulePair,
+  type ApiSchedulePairCreate,
+  type ApiSchedulePairUpdate,
+} from "@/lib/api";
 import { deadlineDate, deadlineToIso, formatDeadline, localIsoDate } from "@/lib/dates";
 import { canManageHomework } from "@/lib/permissions";
 import { lessonKindOf, lessonLocationOf, pairMatchesParity, type WeekParityFilter } from "@/lib/schedule";
@@ -19,6 +25,8 @@ import {
 
 import { HomeworkEditor } from "./homework-editor";
 import { LessonCard } from "./lesson-card";
+import { ScheduleExcelModal } from "./schedule-excel-modal";
+import { SchedulePairEditor } from "./schedule-pair-editor";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -102,7 +110,14 @@ export function ScheduleDashboard(): React.JSX.Element {
   const [canManage, setCanManage] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [hasGroup, setHasGroup] = useState(true);
+  const [groupId, setGroupId] = useState<string | undefined>(undefined);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [pairEditorState, setPairEditorState] = useState<{
+    open: boolean;
+    initialPair: ApiSchedulePair | null;
+    initialDay: string;
+  }>({ open: false, initialPair: null, initialDay: "Понедельник" });
+  const [excelModalOpen, setExcelModalOpen] = useState(false);
   const [editorState, setEditorState] = useState<{
     open: boolean;
     mode?: "form" | "assistant";
@@ -129,6 +144,7 @@ export function ScheduleDashboard(): React.JSX.Element {
       }
 
       const scope = { group_id: user.group_id || undefined };
+      setGroupId(user.group_id || undefined);
       setCanManage(canManageHomework(user));
       setSubgroup(user.subgroup_number === 2 ? 2 : 1);
 
@@ -324,6 +340,51 @@ export function ScheduleDashboard(): React.JSX.Element {
     setSavedMessage("Задание удалено");
   }
 
+  async function handleSavePair(
+    data: ApiSchedulePairCreate | ApiSchedulePairUpdate,
+    pairId?: string,
+  ): Promise<void> {
+    if (pairId) {
+      const updated = await api.updateSchedulePair(pairId, data);
+      setWeekPairs((prev) => prev.map((p) => (p.id === pairId ? updated : p)));
+      setSavedMessage(`Пара «${updated.subject}» обновлена`);
+    } else {
+      const created = await api.createSchedulePair({
+        ...data,
+        group_id: groupId,
+      } as ApiSchedulePairCreate);
+      setWeekPairs((prev) => [...prev, created]);
+      setSavedMessage(`Пара «${created.subject}» добавлена в расписание`);
+    }
+  }
+
+  async function handleDeletePair(pairId: string): Promise<void> {
+    await api.deleteSchedulePair(pairId);
+    setWeekPairs((prev) => prev.filter((p) => p.id !== pairId));
+    setSavedMessage("Пара удалена из расписания");
+  }
+
+  function handleEditPair(lesson: Lesson): void {
+    const pair = weekPairs.find((p) => p.id === lesson.id) || null;
+    setPairEditorState({
+      open: true,
+      initialPair: pair,
+      initialDay: pair?.day_of_week || selectedDay,
+    });
+  }
+
+  async function handleDeletePairFromCard(lesson: Lesson): Promise<void> {
+    if (!window.confirm(`Удалить пару «${lesson.subject}»?`)) return;
+    await handleDeletePair(lesson.id);
+  }
+
+  async function handleImportComplete(): Promise<void> {
+    if (!groupId) return;
+    const pairs = await api.getWeekSchedule({ group_id: groupId }).catch(() => []);
+    setWeekPairs(pairs);
+    setSavedMessage("Расписание успешно импортировано");
+  }
+
   return (
     <div className="page-wrap">
       <header className="page-header">
@@ -340,6 +401,30 @@ export function ScheduleDashboard(): React.JSX.Element {
         </div>
         {canManage ? (
           <div className="header-actions">
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => setExcelModalOpen(true)}
+              aria-label="Импорт расписания из Excel"
+            >
+              <FileSpreadsheet size={16} strokeWidth={1.8} />
+              Импорт Excel
+            </button>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() =>
+                setPairEditorState({
+                  open: true,
+                  initialPair: null,
+                  initialDay: selectedDay,
+                })
+              }
+              aria-label="Добавить пару в расписание"
+            >
+              <Plus size={16} strokeWidth={2} />
+              Пара
+            </button>
             <button
               className="button button-secondary assistant-button"
               type="button"
@@ -498,18 +583,64 @@ export function ScheduleDashboard(): React.JSX.Element {
                 </div>
               </div>
             ) : dayLessons.length === 0 ? (
-              <p className="kanban-empty">На этот день пар нет</p>
+              <div className="kanban-empty" style={{ textAlign: "center", padding: "32px 16px" }}>
+                <p>На этот день пар нет</p>
+                {canManage ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    style={{ marginTop: "12px" }}
+                    onClick={() =>
+                      setPairEditorState({
+                        open: true,
+                        initialPair: null,
+                        initialDay: selectedDay,
+                      })
+                    }
+                  >
+                    <Plus size={14} /> Добавить пару
+                  </button>
+                ) : null}
+              </div>
             ) : (
-              dayLessons.map((lesson) => (
-                <LessonCard
-                  key={lesson.id}
-                  lesson={lesson}
-                  focused={lesson.id === focusedId}
-                  canManage={canManage}
-                  onAddHomework={handleAddHomework}
-                  onEditHomework={handleEditHomework}
-                />
-              ))
+              <>
+                {dayLessons.map((lesson) => (
+                  <LessonCard
+                    key={lesson.id}
+                    lesson={lesson}
+                    focused={lesson.id === focusedId}
+                    canManage={canManage}
+                    onAddHomework={handleAddHomework}
+                    onEditHomework={handleEditHomework}
+                    onEditPair={canManage ? handleEditPair : undefined}
+                    onDeletePair={canManage ? handleDeletePairFromCard : undefined}
+                  />
+                ))}
+                {canManage ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    style={{
+                      width: "100%",
+                      marginTop: "12px",
+                      borderStyle: "dashed",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px",
+                    }}
+                    onClick={() =>
+                      setPairEditorState({
+                        open: true,
+                        initialPair: null,
+                        initialDay: selectedDay,
+                      })
+                    }
+                  >
+                    <Plus size={14} /> Добавить пару на {selectedDay}
+                  </button>
+                ) : null}
+              </>
             )}
           </div>
 
@@ -590,6 +721,23 @@ export function ScheduleDashboard(): React.JSX.Element {
         onSave={handleSave}
         onDelete={canManage ? handleDelete : undefined}
         onParse={canManage ? api.parseHomework : undefined}
+      />
+      <SchedulePairEditor
+        open={pairEditorState.open}
+        initialDay={pairEditorState.initialDay}
+        initialPair={pairEditorState.initialPair}
+        groupId={groupId}
+        onClose={() =>
+          setPairEditorState({ open: false, initialPair: null, initialDay: selectedDay })
+        }
+        onSave={handleSavePair}
+        onDelete={handleDeletePair}
+      />
+      <ScheduleExcelModal
+        open={excelModalOpen}
+        groupId={groupId}
+        onClose={() => setExcelModalOpen(false)}
+        onImportComplete={handleImportComplete}
       />
     </div>
   );

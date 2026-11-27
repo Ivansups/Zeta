@@ -12,6 +12,7 @@ from backend.schedule.models import (
     LessonCellData,
     ParsedLesson,
     ScheduleParseResult,
+    UnresolvedCell,
     WeekParity,
 )
 
@@ -68,6 +69,7 @@ class ScheduleExcelParser:
         for sheet_name in schedule_sheets:
             sheet_result = await self.parse_worksheet(wb[sheet_name])
             result.lessons.extend(sheet_result.lessons)
+            result.unresolved_cells.extend(sheet_result.unresolved_cells)
             result.total_cells_processed += sheet_result.total_cells_processed
             result.regex_parsed_count += sheet_result.regex_parsed_count
             result.llm_parsed_count += sheet_result.llm_parsed_count
@@ -167,6 +169,21 @@ class ScheduleExcelParser:
                     result.unresolved_count += 1
 
                 if not cell_data:
+                    for target_col in range(min_c, max_c + 1):
+                        if target_col in column_meta:
+                            meta = column_meta[target_col]
+                            result.unresolved_cells.append(
+                                UnresolvedCell(
+                                    raw_text=cell_text,
+                                    course=meta["course"],
+                                    group=meta["group"],
+                                    day_of_week=current_day,
+                                    pair_number=current_pair_num,
+                                    start_time=current_time_start,
+                                    end_time=current_time_end,
+                                    week_parity=parity,
+                                )
+                            )
                     continue
 
                 for target_col in range(min_c, max_c + 1):
