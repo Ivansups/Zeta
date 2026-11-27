@@ -23,8 +23,22 @@ type LoginState = "idle" | "authenticating" | "confirmed" | "error";
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "";
 
+/** Restrict post-login redirects to same-origin relative paths. */
+function resolveNextPath(value: string | null | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+  return value;
+}
+
 function LoginForm(): React.JSX.Element {
   const searchParams = useSearchParams();
+  const nextPath = resolveNextPath(
+    searchParams?.get("next") ??
+      (typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("next")
+        : null),
+  );
   const inviteToken =
     searchParams?.get("invite") ||
     searchParams?.get("token") ||
@@ -40,12 +54,11 @@ function LoginForm(): React.JSX.Element {
   useEffect(() => {
     if (state === "confirmed") {
       const timer = window.setTimeout(() => {
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/";
+        window.location.href = nextPath;
       }, 700);
       return () => window.clearTimeout(timer);
     }
-  }, [state]);
+  }, [state, nextPath]);
 
   async function handleTelegramAuth(user: TelegramUser): Promise<void> {
     try {
@@ -207,11 +220,10 @@ function LoginForm(): React.JSX.Element {
             </p>
             <Link
               className="button button-primary login-button"
-              href="/"
+              href={nextPath}
               onClick={(e) => {
                 e.preventDefault();
-                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/";
+                window.location.href = nextPath;
               }}
             >
               Открыть расписание

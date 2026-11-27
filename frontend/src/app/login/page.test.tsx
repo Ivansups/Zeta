@@ -71,6 +71,58 @@ describe("LoginPage", () => {
     );
   });
 
+  it("returns the user to the ?next screen after successful authentication", async () => {
+    window.history.replaceState({}, "", "/login?next=%2Fadmin");
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        user: { id: "user-1", telegram_id: 99999, role: "elder" },
+        access_token: "mock_jwt_token",
+      }),
+    } as Response);
+
+    render(<LoginPage />);
+
+    await act(async () => {
+      window.onTelegramAuth?.({
+        id: 99999,
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: "mock_hash_value",
+      });
+    });
+
+    expect(screen.getByRole("link", { name: "Открыть расписание" })).toHaveAttribute(
+      "href",
+      "/admin",
+    );
+  });
+
+  it("ignores an unsafe ?next value after successful authentication", async () => {
+    window.history.replaceState({}, "", "/login?next=%2F%2Fevil.example");
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        user: { id: "user-1", telegram_id: 99999, role: "student" },
+        access_token: "mock_jwt_token",
+      }),
+    } as Response);
+
+    render(<LoginPage />);
+
+    await act(async () => {
+      window.onTelegramAuth?.({
+        id: 99999,
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: "mock_hash_value",
+      });
+    });
+
+    expect(screen.getByRole("link", { name: "Открыть расписание" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+  });
+
   it("displays error banner when authentication fails", async () => {
     global.fetch = jest.fn().mockResolvedValueOnce({
       ok: false,

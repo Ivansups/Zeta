@@ -95,12 +95,28 @@ export type ApiInvite = {
   expires_at?: string | null;
 };
 
-let refreshInFlight: Promise<boolean> | null = null;
+type RefreshOutcome = "refreshed" | "rejected" | "unavailable";
 
-async function refreshSession(): Promise<boolean> {
+/** A just-rotated session must not be rotated again by late 401 responses. */
+const REFRESH_COOLDOWN_MS = 10_000;
+
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
+let lastRefreshAt = 0;
+
+async function refreshSession(): Promise<RefreshOutcome> {
   refreshInFlight ??= fetch("/api/auth/refresh", { method: "POST" })
-    .then((response) => response.ok)
-    .catch(() => false)
+    .then((response): RefreshOutcome => {
+      if (response.ok) {
+        lastRefreshAt = Date.now();
+        return "refreshed";
+      }
+      // Only an explicit rejection means the session is unusable.
+      if (response.status === 401 || response.status === 403) {
+        return "rejected";
+      }
+      return "unavailable";
+    })
+    .catch((): RefreshOutcome => "unavailable")
     .finally(() => {
       refreshInFlight = null;
     });
@@ -108,8 +124,29 @@ async function refreshSession(): Promise<boolean> {
 }
 
 /**
+ * Redirect to the login page, keeping the current screen in `?next=`
+ * so the user lands back on it after signing in again.
+ */
+function redirectToLogin(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const { pathname, search } = window.location;
+  if (pathname.startsWith("/login")) {
+    return;
+  }
+
+  const target = `${pathname}${search}`;
+  // Full reload after the session is gone: it drops stale client caches.
+  window.location.href =
+    target === "/" ? "/login" : `/login?next=${encodeURIComponent(target)}`;
+}
+
+/**
  * Fetch with a single transparent token refresh on 401.
- * When the refresh token is gone the user is sent back to the login page.
+ * The user is sent back to the login page only when the refresh token is
+ * rejected; a failed refresh call itself must not end the session.
  */
 async function request(url: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(url, init);
@@ -117,19 +154,30 @@ async function request(url: string, init?: RequestInit): Promise<Response> {
     return response;
   }
 
-  if (!(await refreshSession())) {
-    if (
-      typeof window !== "undefined" &&
-      !window.location.pathname.startsWith("/login")
-    ) {
-      // Full reload after the session is gone: it drops stale client caches.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = "/login";
+  if (Date.now() - lastRefreshAt < REFRESH_COOLDOWN_MS) {
+    // The cookies were rotated moments ago, so retry with the fresh token.
+    const retried = await fetch(url, init);
+    if (retried.status === 401) {
+      redirectToLogin();
     }
+    return retried;
+  }
+
+  const outcome = await refreshSession();
+  if (outcome === "unavailable") {
+    return response;
+  }
+  if (outcome === "rejected") {
+    redirectToLogin();
     return response;
   }
 
-  return fetch(url, init);
+  const retried = await fetch(url, init);
+  if (retried.status === 401) {
+    // A fresh token was still rejected: the session is not usable anymore.
+    redirectToLogin();
+  }
+  return retried;
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
