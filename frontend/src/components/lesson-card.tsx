@@ -1,4 +1,4 @@
-import { BookOpen, GraduationCap, MapPin, Plus } from "lucide-react";
+import { BookOpen, GraduationCap, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { HomeworkDescription } from "@/components/homework-description";
 import type { Lesson } from "@/lib/types";
@@ -9,6 +9,8 @@ export type LessonCardProps = {
   canManage?: boolean;
   onAddHomework?: (lesson: Lesson) => void;
   onEditHomework?: (lesson: Lesson) => void;
+  onEditPair?: (lesson: Lesson) => void;
+  onDeletePair?: (lesson: Lesson) => void;
 };
 
 export function LessonCard({
@@ -17,6 +19,8 @@ export function LessonCard({
   canManage = false,
   onAddHomework,
   onEditHomework,
+  onEditPair,
+  onDeletePair,
 }: LessonCardProps): React.JSX.Element {
   return (
     <article
@@ -34,11 +38,37 @@ export function LessonCard({
             <span className="lesson-kind">{lesson.kind}</span>
             <h3>{lesson.subject}</h3>
           </div>
-          {lesson.subgroup === "all" ? (
-            <span className="quiet-badge">Вся группа</span>
-          ) : (
-            <span className="quiet-badge">Подгруппа {lesson.subgroup}</span>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {lesson.subgroup === "all" ? (
+              <span className="quiet-badge">Вся группа</span>
+            ) : (
+              <span className="quiet-badge">Подгруппа {lesson.subgroup}</span>
+            )}
+            {canManage && onEditPair ? (
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => onEditPair(lesson)}
+                aria-label={`Редактировать пару ${lesson.subject}`}
+                style={{ padding: "4px", background: "none", border: "none", cursor: "pointer", color: "var(--muted, #64748b)" }}
+                title="Редактировать пару"
+              >
+                <Pencil size={14} />
+              </button>
+            ) : null}
+            {canManage && onDeletePair ? (
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => onDeletePair(lesson)}
+                aria-label={`Удалить пару ${lesson.subject}`}
+                style={{ padding: "4px", background: "none", border: "none", cursor: "pointer", color: "var(--danger, #ef4444)" }}
+                title="Удалить пару"
+              >
+                <Trash2 size={14} />
+              </button>
+            ) : null}
+          </div>
         </div>
         <p className="lesson-meta">
           <span>

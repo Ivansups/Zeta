@@ -17,6 +17,11 @@ jest.mock("@/lib/api", () => ({
     updateHomework: jest.fn(),
     deleteHomework: jest.fn(),
     parseHomework: jest.fn(),
+    createSchedulePair: jest.fn(),
+    updateSchedulePair: jest.fn(),
+    deleteSchedulePair: jest.fn(),
+    parseScheduleWorkbook: jest.fn(),
+    importScheduleWorkbook: jest.fn(),
   },
 }));
 
@@ -57,6 +62,41 @@ beforeEach(() => {
   mockedApi.createHomework.mockResolvedValue(apiHomework({ id: "hw-new" }));
   mockedApi.updateHomework.mockResolvedValue(apiHomework({ id: "hw-math" }));
   mockedApi.deleteHomework.mockResolvedValue(undefined);
+  mockedApi.createSchedulePair.mockImplementation(async (data) =>
+    apiPair({
+      id: "pair-created-1",
+      subject: data.subject,
+      day_of_week: data.day_of_week,
+      pair_number: data.pair_number,
+      start_time: data.start_time,
+      end_time: data.end_time,
+      subgroup: data.subgroup,
+      week_parity: data.week_parity,
+    }),
+  );
+  mockedApi.updateSchedulePair.mockImplementation(async (id, data) =>
+    apiPair({
+      id,
+      subject: data.subject || "Обновленный предмет",
+      day_of_week: data.day_of_week || currentDayName(today),
+      pair_number: data.pair_number || 1,
+      start_time: data.start_time || "08:30",
+      end_time: data.end_time || "10:05",
+    }),
+  );
+  mockedApi.deleteSchedulePair.mockResolvedValue(undefined);
+  mockedApi.parseScheduleWorkbook.mockResolvedValue({
+    lessons: [],
+    unresolved_cells: [],
+    total_cells_processed: 0,
+    regex_parsed_count: 0,
+    llm_parsed_count: 0,
+    unresolved_count: 0,
+  });
+  mockedApi.importScheduleWorkbook.mockResolvedValue({
+    groups_processed: 1,
+    pairs_saved: 5,
+  });
   mockedApi.parseHomework.mockResolvedValue({
     subject: "Математический анализ",
     description: "Номера 12–18 к четвергу",
@@ -301,5 +341,97 @@ describe("ScheduleDashboard", () => {
 
     expect(await screen.findByText("На этот день пар нет")).toBeInTheDocument();
     expect(screen.getByText("Дедлайнов пока нет")).toBeInTheDocument();
+  });
+
+  it("opens pair editor and creates a new schedule pair through the API", async () => {
+    const user = userEvent.setup();
+    render(<ScheduleDashboard />);
+
+    await screen.findByRole("heading", { name: "Английский язык" });
+
+    // Open editor via header button
+    const addPairBtn = screen.getByRole("button", { name: /Добавить пару в расписание/i });
+    await user.click(addPairBtn);
+
+    expect(await screen.findByText("Новая пара в расписании")).toBeInTheDocument();
+
+    const subjectInput = screen.getByPlaceholderText("Например, Математический анализ");
+    await user.type(subjectInput, "Теория вероятностей");
+
+    const submitBtn = screen.getByRole("button", { name: "Добавить пару" });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockedApi.createSchedulePair).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subject: "Теория вероятностей",
+          group_id: "group-1",
+        }),
+      );
+    });
+  });
+
+  it("edits an existing schedule pair via pencil button", async () => {
+    const user = userEvent.setup();
+    render(<ScheduleDashboard />);
+
+    await screen.findByRole("heading", { name: "Английский язык" });
+
+    const editBtn = screen.getByRole("button", {
+      name: "Редактировать пару Английский язык",
+    });
+    await user.click(editBtn);
+
+    expect(await screen.findByText("Редактировать пару")).toBeInTheDocument();
+
+    const subjectInput = screen.getByPlaceholderText("Например, Математический анализ");
+    await user.clear(subjectInput);
+    await user.type(subjectInput, "Деловой английский");
+
+    const saveBtn = screen.getByRole("button", { name: "Сохранить изменения" });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockedApi.updateSchedulePair).toHaveBeenCalledWith(
+        "11111111-1111-1111-1111-111111111111",
+        expect.objectContaining({
+          subject: "Деловой английский",
+        }),
+      );
+    });
+  });
+
+  it("deletes a schedule pair via trash button", async () => {
+    const user = userEvent.setup();
+    jest.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<ScheduleDashboard />);
+
+    await screen.findByRole("heading", { name: "Английский язык" });
+
+    const deleteBtn = screen.getByRole("button", {
+      name: "Удалить пару Английский язык",
+    });
+    await user.click(deleteBtn);
+
+    await waitFor(() => {
+      expect(mockedApi.deleteSchedulePair).toHaveBeenCalledWith(
+        "11111111-1111-1111-1111-111111111111",
+      );
+    });
+  });
+
+  it("opens Excel import modal when import button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<ScheduleDashboard />);
+
+    await screen.findByRole("heading", { name: "Английский язык" });
+
+    const importBtn = screen.getByRole("button", {
+      name: "Импорт расписания из Excel",
+    });
+    await user.click(importBtn);
+
+    expect(await screen.findByText("Загрузка из Excel (.xlsx)")).toBeInTheDocument();
   });
 });

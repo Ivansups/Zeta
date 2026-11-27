@@ -91,10 +91,24 @@ class ParsedLesson(BaseModel):
     parsed_by: Literal["regex", "llm"] = "regex"
 
 
+class UnresolvedCell(BaseModel):
+    """A cell in schedule grid that could not be parsed automatically."""
+
+    raw_text: str
+    course: int
+    group: str
+    day_of_week: str
+    pair_number: int
+    start_time: str
+    end_time: str
+    week_parity: WeekParity
+
+
 class ScheduleParseResult(BaseModel):
     """Overall outcome of parsing a schedule file or sheet."""
 
     lessons: list[ParsedLesson] = Field(default_factory=list)
+    unresolved_cells: list[UnresolvedCell] = Field(default_factory=list)
     total_cells_processed: int = 0
     regex_parsed_count: int = 0
     llm_parsed_count: int = 0

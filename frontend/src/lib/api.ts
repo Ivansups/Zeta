@@ -12,10 +12,72 @@ export type ApiSchedulePair = {
   teacher?: string | null;
   teacher_title?: string | null;
   room?: string | null;
+  building?: string | null;
   is_online: boolean;
   subgroup?: number | null;
   week_parity?: string | null;
   notes?: string[] | null;
+};
+
+export type ApiSchedulePairCreate = {
+  group_id?: string;
+  day_of_week: string;
+  pair_number: number;
+  start_time: string;
+  end_time: string;
+  week_parity?: string;
+  subgroup?: number | null;
+  subject: string;
+  subject_id?: string | null;
+  teacher?: string | null;
+  teacher_title?: string | null;
+  room?: string | null;
+  building?: string | null;
+  is_online?: boolean;
+  lesson_type?: string;
+  notes?: string[];
+};
+
+export type ApiSchedulePairUpdate = Partial<ApiSchedulePairCreate>;
+
+export type ApiUnresolvedCell = {
+  raw_text: string;
+  course: number;
+  group: string;
+  day_of_week: string;
+  pair_number: number;
+  start_time: string;
+  end_time: string;
+  week_parity: string;
+};
+
+export type ApiScheduleParseResult = {
+  lessons: Array<{
+    course: number;
+    direction: string;
+    program?: string | null;
+    group: string;
+    subgroup?: number | null;
+    day_of_week: string;
+    pair_number: number;
+    start_time: string;
+    end_time: string;
+    week_parity: string;
+    subject: string;
+    subject_id?: string | null;
+    teacher?: string | null;
+    teacher_title?: string | null;
+    room?: string | null;
+    is_online: boolean;
+    lesson_type: string;
+    notes: string[];
+    parsed_by: string;
+  }>;
+  unresolved_cells: ApiUnresolvedCell[];
+  total_cells_processed: number;
+  regex_parsed_count: number;
+  llm_parsed_count: number;
+  unresolved_count: number;
 };
 
 export type ApiUser = {
@@ -203,6 +265,48 @@ export const api = {
 
     const res = await request(`/api/schedule/week?${query.toString()}`, { method: "GET" });
     return handleResponse<ApiSchedulePair[]>(res);
+  },
+
+  async createSchedulePair(data: ApiSchedulePairCreate): Promise<ApiSchedulePair> {
+    const res = await request("/api/schedule/pairs", jsonInit("POST", data));
+    return handleResponse<ApiSchedulePair>(res);
+  },
+
+  async updateSchedulePair(
+    pairId: string,
+    data: ApiSchedulePairUpdate,
+  ): Promise<ApiSchedulePair> {
+    const res = await request(`/api/schedule/pairs/${pairId}`, jsonInit("PATCH", data));
+    return handleResponse<ApiSchedulePair>(res);
+  },
+
+  async deleteSchedulePair(pairId: string): Promise<void> {
+    const res = await request(`/api/schedule/pairs/${pairId}`, { method: "DELETE" });
+    if (!res.ok) {
+      throw new Error(`Failed to delete schedule pair: ${res.status}`);
+    }
+  },
+
+  async parseScheduleWorkbook(file: File): Promise<ApiScheduleParseResult> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await request("/api/schedule/parse", {
+      method: "POST",
+      body: formData,
+    });
+    return handleResponse<ApiScheduleParseResult>(res);
+  },
+
+  async importScheduleWorkbook(
+    file: File,
+  ): Promise<{ groups_processed: number; pairs_saved: number }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await request("/api/schedule/import", {
+      method: "POST",
+      body: formData,
+    });
+    return handleResponse<{ groups_processed: number; pairs_saved: number }>(res);
   },
 
   async getHomeworks(params?: {
