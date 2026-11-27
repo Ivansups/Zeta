@@ -20,6 +20,7 @@ export type ShellUser = {
   name: string;
   role: string;
   group: string;
+  badge: string;
   initials?: string;
 };
 
@@ -55,16 +56,17 @@ function initialsOf(name: string): string {
 
 export function toShellUser(user: ApiUser): ShellUser {
   const name = user.display_name || user.username || "Пользователь";
-  const group = [
-    user.group_name,
-    user.subgroup_number ? `Подгруппа ${user.subgroup_number}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const role = ROLE_LABELS[user.role] ?? user.role;
+  const groupName = user.group_name?.trim() ?? "";
+  const subgroup = user.subgroup_number
+    ? `Подгруппа ${user.subgroup_number}`
+    : "";
+  const status = subgroup || role;
   return {
     name,
-    role: ROLE_LABELS[user.role] ?? user.role,
-    group,
+    role,
+    group: groupName || subgroup,
+    badge: groupName ? `${groupName} · ${status}` : status,
     initials: initialsOf(name),
   };
 }
@@ -150,9 +152,7 @@ export function AppShell({ active, children, user }: AppShellProps): React.JSX.E
               </span>
               <div>
                 <strong>{displayedUser.name}</strong>
-                <span>
-                  {[displayedUser.role, displayedUser.group].filter(Boolean).join(" · ")}
-                </span>
+                <span className="profile-badge">{displayedUser.badge}</span>
               </div>
             </div>
           ) : (
