@@ -9,15 +9,20 @@ export function localIsoDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function deadlineDate(iso: string): string {
+export function deadlineDate(iso: string | null | undefined): string {
+  if (!iso) return "";
   return iso.slice(0, 10);
 }
 
-export function deadlineToIso(date: string): string {
+export function deadlineToIso(date: string | null | undefined): string | null {
+  if (!date) return null;
   return `${date}T12:00:00Z`;
 }
 
-export function formatDeadline(iso: string): string {
-  const [year, month, day] = deadlineDate(iso).split("-").map(Number);
+export function formatDeadline(iso: string | null | undefined): string {
+  if (!iso) return "Без дедлайна";
+  const str = deadlineDate(iso);
+  if (!str) return "Без дедлайна";
+  const [year, month, day] = str.split("-").map(Number);
   return formatDayCaption(new Date(year, month - 1, day));
 }

@@ -8,12 +8,13 @@ import {
 const today = new Date(2026, 10, 21, 12, 0); // Saturday 21 Nov 2026
 
 describe("homework board columns", () => {
-  it("builds overdue, today, tomorrow and later columns", () => {
+  it("builds overdue, today, tomorrow, later and backlog columns", () => {
     expect(buildHomeworkColumns(today).map((column) => column.title)).toEqual([
       "Просрочено",
       "Сегодня",
       "Завтра",
       "Позже",
+      "Без срока",
     ]);
   });
 
@@ -22,6 +23,8 @@ describe("homework board columns", () => {
     expect(columnKeyForDeadline("2026-11-21T23:59:00Z", today)).toBe("today");
     expect(columnKeyForDeadline("2026-11-22T12:00:00Z", today)).toBe("tomorrow");
     expect(columnKeyForDeadline("2026-12-30T12:00:00Z", today)).toBe("later");
+    expect(columnKeyForDeadline(null, today)).toBe("backlog");
+    expect(columnKeyForDeadline(undefined, today)).toBe("backlog");
   });
 
   describe("calendar mode columns", () => {

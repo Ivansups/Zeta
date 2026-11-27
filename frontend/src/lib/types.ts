@@ -28,7 +28,11 @@ export type HomeworkDraft = {
   subject?: string;
   subgroup?: Subgroup | "all";
   description: string;
-  dueDate: string;
+  dueDate?: string | null;
+  noDeadline?: boolean;
+  isPersonal?: boolean;
+  targetType?: "all" | "subgroup" | "custom";
+  participantIds?: string[];
 };
 
 export type Student = {

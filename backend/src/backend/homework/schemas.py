@@ -6,16 +6,58 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class HomeworkParticipantRead(BaseModel):
+    """Information about an assigned homework participant."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: uuid.UUID
+    display_name: str | None = None
+    is_submitted: bool = False
+    submitted_at: datetime | None = None
+
+
+class HomeworkParticipantStatusUpdate(BaseModel):
+    """Payload for elder to mark participant submission status."""
+
+    is_submitted: bool
+
+
+class HomeworkCompletionResponse(BaseModel):
+    """Personal completion toggle outcome."""
+
+    homework_id: uuid.UUID
+    is_completed: bool
+    completed_at: datetime | None = None
+
+
+class HomeworkModerateRequest(BaseModel):
+    """Payload to approve or reject a crowdsourced homework proposal."""
+
+    action: str  # "approve" | "reject"
+    moderation_comment: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=256)
+    description: str | None = Field(default=None, min_length=1)
+    deadline: datetime | None = None
+    subject: str | None = Field(default=None, max_length=256)
+    subgroup: int | None = Field(default=None, ge=1, le=2)
+    target_type: str | None = None
+    participant_ids: list[uuid.UUID] | None = None
+
+
 class HomeworkCreate(BaseModel):
     """Payload to create a new homework assignment."""
 
     title: str = Field(..., min_length=1, max_length=256)
     description: str = Field(..., min_length=1)
-    deadline: datetime
+    deadline: datetime | None = None
     group_id: uuid.UUID | None = None
     schedule_pair_id: uuid.UUID | None = None
     subgroup: int | None = Field(default=None, ge=1, le=2)
     subject: str | None = Field(default=None, max_length=256)
+    is_personal: bool = True
+    target_type: str = "all"
+    participant_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class HomeworkUpdate(BaseModel):
@@ -27,6 +69,9 @@ class HomeworkUpdate(BaseModel):
     schedule_pair_id: uuid.UUID | None = None
     subgroup: int | None = Field(default=None, ge=1, le=2)
     subject: str | None = Field(default=None, max_length=256)
+    is_personal: bool | None = None
+    target_type: str | None = None
+    participant_ids: list[uuid.UUID] | None = None
 
 
 class HomeworkRead(BaseModel):
@@ -35,14 +80,23 @@ class HomeworkRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    group_id: uuid.UUID
+    group_id: uuid.UUID | None = None
     group_name: str | None = None
     schedule_pair_id: uuid.UUID | None = None
     subgroup: int | None = None
     title: str
     description: str
     subject: str | None = None
-    deadline: datetime
+    deadline: datetime | None = None
+    is_personal: bool = False
+    status: str = "approved"
+    target_type: str = "all"
+    moderation_comment: str | None = None
+    approved_by_id: uuid.UUID | None = None
+    edited_by_id: uuid.UUID | None = None
+    submitted_to_group_at: datetime | None = None
+    is_completed: bool = False
+    participants: list[HomeworkParticipantRead] = Field(default_factory=list)
     created_by_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime

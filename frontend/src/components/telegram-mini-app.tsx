@@ -94,7 +94,7 @@ function mapApiPairToLesson(pair: ApiSchedulePair, homeworks: ApiHomework[]): Le
       ? {
           id: matchingHw.id,
           description: matchingHw.description,
-          dueDate: matchingHw.deadline.slice(0, 10),
+          dueDate: matchingHw.deadline ? matchingHw.deadline.slice(0, 10) : "",
           subgroup: (matchingHw.subgroup as Subgroup) || "all",
         }
       : undefined,

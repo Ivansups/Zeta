@@ -51,6 +51,8 @@ function HomeworkEditorForm({
   const [dueDate, setDueDate] = useState(
     initialData?.dueDate ?? defaultLesson?.date ?? "",
   );
+  const [noDeadline, setNoDeadline] = useState(!initialData?.dueDate && initialData !== undefined && initialData !== null);
+  const [isPersonal, setIsPersonal] = useState(false);
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [errors, setErrors] = useState<{
     description?: string;
@@ -146,8 +148,8 @@ function HomeworkEditorForm({
       newErrors.description = "Добавьте описание задания";
     }
 
-    if (!dueDate.trim()) {
-      newErrors.dueDate = "Укажите дату сдачи";
+    if (!noDeadline && !dueDate.trim()) {
+      newErrors.dueDate = "Укажите дату сдачи или отметьте 'Без дедлайна'";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -162,7 +164,9 @@ function HomeworkEditorForm({
         ...(initialData?.id ? { id: initialData.id } : {}),
         lessonId,
         subgroup,
-        dueDate: dueDate.trim() || selectedLesson?.date || "",
+        dueDate: noDeadline ? null : (dueDate.trim() || selectedLesson?.date || ""),
+        noDeadline,
+        isPersonal,
         description: description.trim(),
       });
       resetAndClose();
@@ -353,20 +357,46 @@ function HomeworkEditorForm({
                 </select>
               </div>
 
-              <label className="field-label" htmlFor="dueDate">
-                Дата сдачи
-              </label>
-              <input
-                className="field-input"
-                id="dueDate"
-                type="date"
-                value={dueDate}
-                onChange={(event) => {
-                  setDueDate(event.target.value);
-                  setErrors((prev) => ({ ...prev, dueDate: undefined }));
-                }}
-                aria-describedby={errors.dueDate ? "dueDate-error" : undefined}
-              />
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", margin: "8px 0 12px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
+                  <input
+                    type="checkbox"
+                    checked={isPersonal}
+                    onChange={(e) => setIsPersonal(e.target.checked)}
+                  />
+                  Личная задача (только для меня)
+                </label>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <label className="field-label" htmlFor="dueDate" style={{ margin: 0 }}>
+                  Дата сдачи
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", color: "var(--muted, #64748b)" }}>
+                  <input
+                    type="checkbox"
+                    checked={noDeadline}
+                    onChange={(e) => {
+                      setNoDeadline(e.target.checked);
+                      if (e.target.checked) setErrors((prev) => ({ ...prev, dueDate: undefined }));
+                    }}
+                  />
+                  Без дедлайна
+                </label>
+              </div>
+              {!noDeadline ? (
+                <input
+                  className="field-input"
+                  id="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(event) => {
+                    setDueDate(event.target.value);
+                    setErrors((prev) => ({ ...prev, dueDate: undefined }));
+                  }}
+                  aria-describedby={errors.dueDate ? "dueDate-error" : undefined}
+                />
+              ) : null}
               {errors.dueDate ? (
                 <p className="field-error" id="dueDate-error" role="alert">
                   {errors.dueDate}
