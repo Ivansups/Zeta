@@ -71,6 +71,36 @@ describe("LoginPage", () => {
     );
   });
 
+  it("returns to the invite page after login instead of applying it silently", async () => {
+    window.history.replaceState({}, "", "/login?invite=group_invite_xyz");
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        user: { id: "dev-user", display_name: "Тестовый пользователь" },
+        access_token: "token",
+      }),
+    } as Response);
+
+    render(<LoginPage />);
+
+    await act(async () => {
+      window.onTelegramAuth?.({
+        id: 99999,
+        first_name: "Иван",
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: "mock_hash_value",
+      });
+    });
+
+    const requestInit = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(requestInit.body as string)).not.toHaveProperty(
+      "invite_token",
+    );
+    expect(
+      screen.getByRole("link", { name: "Перейти к приглашению" }),
+    ).toHaveAttribute("href", "/invite/group_invite_xyz");
+  });
+
   it("displays error banner when authentication fails", async () => {
     global.fetch = jest.fn().mockResolvedValueOnce({
       ok: false,
