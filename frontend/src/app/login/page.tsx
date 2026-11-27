@@ -32,6 +32,10 @@ function LoginForm(): React.JSX.Element {
       ? new URLSearchParams(window.location.search).get("invite") ||
         new URLSearchParams(window.location.search).get("token")
       : null);
+  // An invite is confirmed on its own page after login, never applied silently.
+  const destination = inviteToken
+    ? `/invite/${encodeURIComponent(inviteToken)}`
+    : "/";
 
   const [state, setState] = useState<LoginState>("idle");
   const [userName, setUserName] = useState<string | null>(null);
@@ -40,12 +44,11 @@ function LoginForm(): React.JSX.Element {
   useEffect(() => {
     if (state === "confirmed") {
       const timer = window.setTimeout(() => {
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/";
+        window.location.href = destination;
       }, 700);
       return () => window.clearTimeout(timer);
     }
-  }, [state]);
+  }, [state, destination]);
 
   async function handleTelegramAuth(user: TelegramUser): Promise<void> {
     try {
@@ -55,10 +58,7 @@ function LoginForm(): React.JSX.Element {
       const response = await fetch("/api/auth/telegram/widget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...user,
-          invite_token: inviteToken || undefined,
-        }),
+        body: JSON.stringify(user),
       });
 
       if (!response.ok) {
@@ -89,12 +89,7 @@ function LoginForm(): React.JSX.Element {
       setState("authenticating");
       setErrorMessage(null);
 
-      const devLoginInit: RequestInit = { method: "POST" };
-      if (inviteToken) {
-        devLoginInit.headers = { "Content-Type": "application/json" };
-        devLoginInit.body = JSON.stringify({ invite_token: inviteToken });
-      }
-      const response = await fetch("/api/auth/dev-login", devLoginInit);
+      const response = await fetch("/api/auth/dev-login", { method: "POST" });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
@@ -202,19 +197,24 @@ function LoginForm(): React.JSX.Element {
             <h1>Вы вошли</h1>
             <p className="login-copy">
               {userName
-                ? `Профиль ${userName} подтверждён. Переходим к расписанию...`
-                : "Профиль найден. Переходим к расписанию..."}
+                ? `Профиль ${userName} подтверждён. ${
+                    inviteToken
+                      ? "Переходим к приглашению..."
+                      : "Переходим к расписанию..."
+                  }`
+                : inviteToken
+                  ? "Профиль найден. Переходим к приглашению..."
+                  : "Профиль найден. Переходим к расписанию..."}
             </p>
             <Link
               className="button button-primary login-button"
-              href="/"
+              href={destination}
               onClick={(e) => {
                 e.preventDefault();
-                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/";
+                window.location.href = destination;
               }}
             >
-              Открыть расписание
+              {inviteToken ? "Перейти к приглашению" : "Открыть расписание"}
               <ArrowRight size={18} />
             </Link>
           </>

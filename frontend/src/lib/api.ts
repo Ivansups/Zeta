@@ -95,6 +95,14 @@ export type ApiInvite = {
   expires_at?: string | null;
 };
 
+export type ApiInvitePreview = {
+  group_id?: string | null;
+  group_name: string;
+  subgroup_number?: number | null;
+  role: string;
+  elder_name?: string | null;
+};
+
 let refreshInFlight: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
@@ -111,7 +119,11 @@ async function refreshSession(): Promise<boolean> {
  * Fetch with a single transparent token refresh on 401.
  * When the refresh token is gone the user is sent back to the login page.
  */
-async function request(url: string, init?: RequestInit): Promise<Response> {
+async function request(
+  url: string,
+  init?: RequestInit,
+  redirectOnAuthFailure = true,
+): Promise<Response> {
   const response = await fetch(url, init);
   if (response.status !== 401) {
     return response;
@@ -119,6 +131,7 @@ async function request(url: string, init?: RequestInit): Promise<Response> {
 
   if (!(await refreshSession())) {
     if (
+      redirectOnAuthFailure &&
       typeof window !== "undefined" &&
       !window.location.pathname.startsWith("/login")
     ) {
@@ -154,6 +167,19 @@ export const api = {
   async getMe(): Promise<ApiUser | null> {
     try {
       const res = await request("/api/auth/me", { method: "GET" });
+      if (res.status === 401) {
+        return null;
+      }
+      return await handleResponse<ApiUser>(res);
+    } catch {
+      return null;
+    }
+  },
+
+  /** Same as getMe, but never redirects: used on public pages such as invites. */
+  async getMeQuiet(): Promise<ApiUser | null> {
+    try {
+      const res = await request("/api/auth/me", { method: "GET" }, false);
       if (res.status === 401) {
         return null;
       }
@@ -276,6 +302,14 @@ export const api = {
       jsonInit("POST", { token: inviteToken }),
     );
     return handleResponse<ApiUser>(res);
+  },
+
+  async getInvitePreview(inviteToken: string): Promise<ApiInvitePreview> {
+    const res = await request(
+      `/api/auth/invites/${encodeURIComponent(inviteToken)}`,
+      { method: "GET" },
+    );
+    return handleResponse<ApiInvitePreview>(res);
   },
 
   async listUsers(): Promise<ApiUser[]> {

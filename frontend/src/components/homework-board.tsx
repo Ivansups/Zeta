@@ -27,6 +27,8 @@ import {
 } from "@/lib/homework-columns";
 import { lessonKindOf, lessonLocationOf } from "@/lib/schedule";
 import type { Subgroup } from "@/lib/types";
+
+import { OnboardingCard } from "./onboarding-card";
 import { addDays, currentDayName, formatDayCaption } from "@/lib/week";
 
 function homeworksLabel(count: number): string {
@@ -134,6 +136,8 @@ export function HomeworkBoard(): React.JSX.Element {
   const [weekOffset, setWeekOffset] = useState<number>(0);
   const [homeworks, setHomeworks] = useState<ApiHomework[] | null>(null);
   const [pairs, setPairs] = useState<ApiSchedulePair[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const today = useMemo(() => new Date(), []);
   const timelineColumns = useMemo(() => buildHomeworkColumns(today), [today]);
@@ -162,6 +166,11 @@ export function HomeworkBoard(): React.JSX.Element {
       if (me) {
         setSubgroup(me.subgroup_number === 2 ? 2 : 1);
       }
+      if (me && !me.group_id) {
+        setNeedsOnboarding(true);
+        setLoaded(true);
+        return;
+      }
       const [list, weekPairs] = await Promise.all([
         api.getHomeworks().catch(() => [] as ApiHomework[]),
         api.getWeekSchedule(me?.group_id ? { group_id: me.group_id } : {}).catch(
@@ -171,6 +180,7 @@ export function HomeworkBoard(): React.JSX.Element {
       if (!cancelled) {
         setHomeworks(list);
         setPairs(weekPairs);
+        setLoaded(true);
       }
     }
     void load();
@@ -228,6 +238,10 @@ export function HomeworkBoard(): React.JSX.Element {
     });
     return count;
   }, [calendarColumns, cardsByDay]);
+
+  if (loaded && needsOnboarding) {
+    return <OnboardingCard />;
+  }
 
   return (
     <section className="homework-board" aria-label="Канбан домашних заданий">

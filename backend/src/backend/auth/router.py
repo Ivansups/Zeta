@@ -31,6 +31,7 @@ from backend.auth.schemas import (
     ElderInviteCreateRequest,
     GroupCreateRequest,
     GroupResponse,
+    InvitePreviewResponse,
     InviteResponse,
     JoinGroupRequest,
     RoleInviteCreateRequest,
@@ -499,6 +500,21 @@ async def join_group_by_invite(
     resp = UserResponse.model_validate(user_with_group)
     resp.group_name = user_with_group.group.name if user_with_group.group else None
     return resp
+
+
+@router.get("/invites/{token}", response_model=InvitePreviewResponse)
+async def preview_invite(
+    token: str,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> InvitePreviewResponse:
+    """Public preview of an invite link, shown before joining."""
+    try:
+        return await service.preview_invite(token)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(err),
+        ) from err
 
 
 @router.get("/invites", response_model=list[InviteResponse])

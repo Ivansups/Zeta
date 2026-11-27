@@ -19,6 +19,7 @@ import {
 
 import { HomeworkEditor } from "./homework-editor";
 import { LessonCard } from "./lesson-card";
+import { OnboardingCard } from "./onboarding-card";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -149,7 +150,7 @@ export function ScheduleDashboard(): React.JSX.Element {
 
       setWeekPairs(weekPairs_);
       setHomeworks(homeworkList);
-      setGroupName(weekPairs_[0]?.group_name ?? "");
+      setGroupName(weekPairs_[0]?.group_name ?? user.group_name ?? "");
       setLoaded(true);
 
       const requestedLesson = new URLSearchParams(window.location.search).get("lesson");
@@ -324,6 +325,14 @@ export function ScheduleDashboard(): React.JSX.Element {
     setSavedMessage("Задание удалено");
   }
 
+  if (loaded && !hasGroup) {
+    return (
+      <div className="page-wrap">
+        <OnboardingCard />
+      </div>
+    );
+  }
+
   return (
     <div className="page-wrap">
       <header className="page-header">
@@ -465,38 +474,6 @@ export function ScheduleDashboard(): React.JSX.Element {
 
             {!loaded ? (
               <p className="kanban-empty">Загружаем расписание…</p>
-            ) : !hasGroup ? (
-              <div
-                className="onboarding-no-group-card"
-                style={{
-                  padding: "32px 24px",
-                  textAlign: "center",
-                  background: "var(--card-bg, #ffffff)",
-                  borderRadius: "16px",
-                  border: "1px dashed var(--border-color, #e2e8f0)",
-                  margin: "12px 0",
-                }}
-              >
-                <h2 style={{ fontSize: "18px", marginBottom: "8px" }}>
-                  У вас пока нет учебной группы
-                </h2>
-                <p
-                  style={{
-                    color: "var(--muted, #64748b)",
-                    maxWidth: "480px",
-                    margin: "0 auto 20px",
-                    fontSize: "14px",
-                  }}
-                >
-                  Чтобы видеть расписание занятий и актуальные домашние задания,
-                  создайте свою группу или перейдите по ссылке-приглашению от старосты.
-                </p>
-                <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-                  <a href="/admin" className="button button-primary">
-                    Создать группу
-                  </a>
-                </div>
-              </div>
             ) : dayLessons.length === 0 ? (
               <p className="kanban-empty">На этот день пар нет</p>
             ) : (

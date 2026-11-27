@@ -322,7 +322,7 @@ async def test_invites_flow_student_helper_curator(
     )
     failed_login = await client.post("/auth/telegram/widget", json=helper_data)
     assert failed_login.status_code == 400
-    assert "revoked" in failed_login.json()["detail"]
+    assert "отозвана" in failed_login.json()["detail"]
 
 
 async def test_transaction_commits_persisted_to_independent_session(
@@ -634,6 +634,146 @@ async def test_join_group_by_invite_and_uuid_token(
     assert join_uuid_resp.status_code == 200
     assert join_uuid_resp.json()["group_name"] == "SE-101"
     assert join_uuid_resp.json()["subgroup_number"] == 2
+
+
+async def test_invite_preview_shows_group_details(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(
+        client, test_settings, 9101, "PREVIEW-01"
+    )
+    invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 2},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    raw_token = invite.json()["token"]
+
+    preview = await client.get(f"/auth/invites/{raw_token}")
+
+    assert preview.status_code == 200
+    data = preview.json()
+    assert data["group_name"] == "PREVIEW-01"
+    assert data["subgroup_number"] == 2
+    assert data["role"] == "student"
+    assert data["elder_name"] == "Ivan Klimov"
+
+
+async def test_invite_preview_rejects_revoked_link(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(
+        client, test_settings, 9102, "PREVIEW-02"
+    )
+    invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    raw_token = invite.json()["token"]
+    await client.delete(
+        f"/auth/invites/{invite.json()['id']}",
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+
+    preview = await client.get(f"/auth/invites/{raw_token}")
+
+    assert preview.status_code == 404
+    assert "отозвана" in preview.json()["detail"]
+
+
+async def test_join_group_rejects_moving_to_another_group(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    first_access = await _create_elder_with_group(
+        client, test_settings, 9103, "HOP-FIRST"
+    )
+    first_invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {first_access}"},
+    )
+    second_access = await _create_elder_with_group(
+        client, test_settings, 9104, "HOP-SECOND"
+    )
+    second_invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 2},
+        headers={"Authorization": f"Bearer {second_access}"},
+    )
+
+    student_data = make_widget_auth_data(
+        telegram_id=9105, bot_token=test_settings.telegram_bot_token
+    )
+    student_login = await client.post("/auth/telegram/widget", json=student_data)
+    student_access = student_login.json()["access_token"]
+
+    joined = await client.post(
+        "/auth/invites/join",
+        json={"token": first_invite.json()["token"]},
+        headers={"Authorization": f"Bearer {student_access}"},
+    )
+    assert joined.status_code == 200
+
+    # The access token from the previous session is stale after the join.
+    relogin = await client.post("/auth/telegram/widget", json=student_data)
+    fresh_access = relogin.json()["access_token"]
+
+    hopped = await client.post(
+        "/auth/invites/join",
+        json={"token": second_invite.json()["token"]},
+        headers={"Authorization": f"Bearer {fresh_access}"},
+    )
+
+    assert hopped.status_code == 400
+    assert "другой группе" in hopped.json()["detail"]
+
+    me = await client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {fresh_access}"}
+    )
+    assert me.json()["group_name"] == "HOP-FIRST"
+
+
+async def test_join_same_group_again_is_idempotent(
+    client: AsyncClient, test_settings: Settings
+) -> None:
+    elder_access = await _create_elder_with_group(
+        client, test_settings, 9106, "IDEMPOTENT-01"
+    )
+    student_invite = await client.post(
+        "/auth/invites/student",
+        json={"subgroup_number": 1},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+    helper_invite = await client.post(
+        "/auth/invites/role",
+        json={"role": "helper"},
+        headers={"Authorization": f"Bearer {elder_access}"},
+    )
+
+    student_data = make_widget_auth_data(
+        telegram_id=9107, bot_token=test_settings.telegram_bot_token
+    )
+    student_login = await client.post("/auth/telegram/widget", json=student_data)
+    student_access = student_login.json()["access_token"]
+    joined = await client.post(
+        "/auth/invites/join",
+        json={"token": student_invite.json()["token"]},
+        headers={"Authorization": f"Bearer {student_access}"},
+    )
+    assert joined.status_code == 200
+
+    relogin = await client.post("/auth/telegram/widget", json=student_data)
+    fresh_access = relogin.json()["access_token"]
+    again = await client.post(
+        "/auth/invites/join",
+        json={"token": helper_invite.json()["token"]},
+        headers={"Authorization": f"Bearer {fresh_access}"},
+    )
+
+    assert again.status_code == 200
+    assert again.json()["group_name"] == "IDEMPOTENT-01"
+    assert again.json()["role"] == "student"
 
 
 async def test_dev_login_with_invite_token(

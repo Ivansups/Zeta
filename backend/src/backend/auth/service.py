@@ -12,6 +12,7 @@ from backend.auth.models import (
     RoleEnum,
     User,
 )
+from backend.auth.schemas import InvitePreviewResponse
 from backend.auth.security import create_access_token, generate_random_token, hash_token
 
 
@@ -105,33 +106,60 @@ class AuthService:
 
         return user, access_token, raw_refresh_token
 
+    async def _get_invite(
+        self, raw_invite_token: str, *, for_update: bool = False
+    ) -> InviteToken | None:
+        """Find an invite by its raw token, falling back to the legacy UUID form."""
+        token_hash = hash_token(raw_invite_token)
+        stmt = select(InviteToken).where(InviteToken.token_hash == token_hash)
+        if for_update:
+            stmt = stmt.with_for_update()
+        invite = (await self.session.execute(stmt)).scalar_one_or_none()
+        if invite is not None:
+            return invite
+
+        try:
+            invite_uuid = uuid.UUID(raw_invite_token)
+        except ValueError:
+            return None
+
+        stmt_uuid = select(InviteToken).where(InviteToken.id == invite_uuid)
+        if for_update:
+            stmt_uuid = stmt_uuid.with_for_update()
+        return (await self.session.execute(stmt_uuid)).scalar_one_or_none()
+
+    async def preview_invite(self, raw_invite_token: str) -> InvitePreviewResponse:
+        """Return the public details of an active invite link."""
+        invite = await self._get_invite(raw_invite_token)
+        if invite is None or invite.is_revoked:
+            raise ValueError("Ссылка-приглашение недействительна или отозвана")
+
+        group_name = invite.group_name
+        if group_name is None and invite.group_id is not None:
+            group = await self.session.get(Group, invite.group_id)
+            group_name = group.name if group is not None else None
+        if group_name is None:
+            raise ValueError("Приглашение не привязано к учебной группе")
+
+        elder_name: str | None = None
+        if invite.created_by_user_id is not None:
+            creator = await self.session.get(User, invite.created_by_user_id)
+            if creator is not None:
+                elder_name = creator.display_name or creator.username
+
+        return InvitePreviewResponse(
+            group_id=invite.group_id,
+            group_name=group_name,
+            subgroup_number=invite.subgroup_number,
+            role=invite.role,
+            elder_name=elder_name,
+        )
+
     async def _apply_invite(self, user: User, raw_invite_token: str) -> None:
         """Validate and apply an invite token to a user."""
-        token_hash = hash_token(raw_invite_token)
-        stmt = (
-            select(InviteToken)
-            .where(InviteToken.token_hash == token_hash)
-            .with_for_update()
-        )
-        result = await self.session.execute(stmt)
-        invite = result.scalar_one_or_none()
-
-        if not invite:
-            # Fallback to check by UUID id for existing active invites
-            try:
-                invite_uuid = uuid.UUID(raw_invite_token)
-                stmt_uuid = (
-                    select(InviteToken)
-                    .where(InviteToken.id == invite_uuid)
-                    .with_for_update()
-                )
-                res_uuid = await self.session.execute(stmt_uuid)
-                invite = res_uuid.scalar_one_or_none()
-            except ValueError:
-                pass
-
-        if not invite or invite.is_revoked:
-            raise ValueError("Invite link is invalid or has been revoked")
+        invite = await self._get_invite(raw_invite_token, for_update=True)
+        if invite is None or invite.is_revoked:
+            raise ValueError("Ссылка-приглашение недействительна или отозвана")
 
         target_group_id = invite.group_id
         if target_group_id is None and invite.group_name:
@@ -143,6 +171,17 @@ class AuthService:
                 self.session.add(group)
                 await self.session.flush()
             target_group_id = group.id
+
+        if target_group_id is None:
+            raise ValueError("Приглашение не привязано к учебной группе")
+
+        if user.group_id is not None and user.group_id != target_group_id:
+            raise ValueError(
+                "Вы уже состоите в другой группе. Сначала покиньте текущую группу."
+            )
+        if user.group_id is not None:
+            # Already a member: joining again must not demote or duplicate anything.
+            return
 
         user.group_id = target_group_id
         user.role = invite.role

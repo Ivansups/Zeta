@@ -69,7 +69,7 @@ describe("AdminPage", () => {
     expect(
       await screen.findByRole("tab", { name: "Приглашения" }),
     ).toHaveAttribute("aria-selected", "true");
-    expect(await screen.findByText("Подгруппа 1")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Подгруппа 1" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Создать группу" })).not.toBeInTheDocument();
   });
 
