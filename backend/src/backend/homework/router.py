@@ -16,12 +16,16 @@ from backend.homework.schemas import (
     CancelDraftResponse,
     ConfirmedHomeworkResponse,
     HomeworkCancelRequest,
+    HomeworkCompletionResponse,
     HomeworkConfirmRequest,
     HomeworkCreate,
     HomeworkDraftResponse,
+    HomeworkModerateRequest,
     HomeworkParsePreview,
     HomeworkParsePreviewRequest,
     HomeworkParseRequest,
+    HomeworkParticipantRead,
+    HomeworkParticipantStatusUpdate,
     HomeworkRead,
     HomeworkUpdate,
 )
@@ -30,8 +34,30 @@ from backend.homework.service import HomeworkService
 router = APIRouter(prefix="/homework", tags=["homework"])
 
 
-def _map_homework_to_read(hw: Homework) -> HomeworkRead:
+def _map_homework_to_read(
+    hw: Homework, current_user_id: uuid.UUID | None = None
+) -> HomeworkRead:
+    import contextlib
+
     group_name = hw.group.name if hw.group else None
+    is_completed = False
+    with contextlib.suppress(Exception):
+        if current_user_id and hw.completions:
+            is_completed = any(c.user_id == current_user_id for c in hw.completions)
+
+    participants_list: list[HomeworkParticipantRead] = []
+    with contextlib.suppress(Exception):
+        if hw.participants:
+            participants_list = [
+                HomeworkParticipantRead(
+                    user_id=p.user_id,
+                    display_name=p.user.display_name if p.user else None,
+                    is_submitted=p.is_submitted,
+                    submitted_at=p.submitted_at,
+                )
+                for p in hw.participants
+            ]
+
     return HomeworkRead(
         id=hw.id,
         group_id=hw.group_id,
@@ -42,6 +68,15 @@ def _map_homework_to_read(hw: Homework) -> HomeworkRead:
         description=hw.description,
         subject=hw.subject,
         deadline=hw.deadline,
+        is_personal=hw.is_personal,
+        status=hw.status,
+        target_type=hw.target_type,
+        moderation_comment=hw.moderation_comment,
+        approved_by_id=hw.approved_by_id,
+        edited_by_id=hw.edited_by_id,
+        submitted_to_group_at=hw.submitted_to_group_at,
+        is_completed=is_completed,
+        participants=participants_list,
         created_by_id=hw.created_by_id,
         created_at=hw.created_at,
         updated_at=hw.updated_at,
@@ -57,7 +92,7 @@ async def create_homework(
     """Create a new homework task for the user's group."""
     service = HomeworkService(session=session)
     hw = await service.create_homework(user=current_user, data=data)
-    return _map_homework_to_read(hw)
+    return _map_homework_to_read(hw, current_user_id=current_user.id)
 
 
 @router.get("", response_model=list[HomeworkRead])
@@ -78,7 +113,7 @@ async def list_homeworks(
         date_from=date_from,
         date_to=date_to,
     )
-    return [_map_homework_to_read(hw) for hw in items]
+    return [_map_homework_to_read(hw, current_user_id=current_user.id) for hw in items]
 
 
 @router.post("/parse", response_model=HomeworkParsePreview)
@@ -102,7 +137,7 @@ async def get_homework(
     """Retrieve details of a single homework assignment."""
     service = HomeworkService(session=session)
     hw = await service.get_homework_by_id(user=current_user, homework_id=homework_id)
-    return _map_homework_to_read(hw)
+    return _map_homework_to_read(hw, current_user_id=current_user.id)
 
 
 @router.patch("/{homework_id}", response_model=HomeworkRead)
@@ -117,7 +152,85 @@ async def update_homework(
     hw = await service.update_homework(
         user=current_user, homework_id=homework_id, data=data
     )
-    return _map_homework_to_read(hw)
+    return _map_homework_to_read(hw, current_user_id=current_user.id)
+
+
+@router.post("/{homework_id}/suggest", response_model=HomeworkRead)
+async def suggest_homework(
+    homework_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HomeworkRead:
+    """Student suggests their personal task to their group."""
+    service = HomeworkService(session=session)
+    hw = await service.suggest_homework(user=current_user, homework_id=homework_id)
+    return _map_homework_to_read(hw, current_user_id=current_user.id)
+
+
+@router.post("/{homework_id}/recall", response_model=HomeworkRead)
+async def recall_homework(
+    homework_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HomeworkRead:
+    """Student recalls their pending suggestion back to personal."""
+    service = HomeworkService(session=session)
+    hw = await service.recall_homework(user=current_user, homework_id=homework_id)
+    return _map_homework_to_read(hw, current_user_id=current_user.id)
+
+
+@router.post("/{homework_id}/moderate", response_model=HomeworkRead)
+async def moderate_homework(
+    homework_id: uuid.UUID,
+    data: HomeworkModerateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HomeworkRead:
+    """Elder moderates and approves/rejects proposed homework."""
+    service = HomeworkService(session=session)
+    hw = await service.moderate_homework(
+        user=current_user, homework_id=homework_id, data=data
+    )
+    return _map_homework_to_read(hw, current_user_id=current_user.id)
+
+
+@router.post(
+    "/{homework_id}/participants/{user_id}/status",
+    response_model=HomeworkParticipantRead,
+)
+async def update_participant_status(
+    homework_id: uuid.UUID,
+    user_id: uuid.UUID,
+    data: HomeworkParticipantStatusUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HomeworkParticipantRead:
+    """Elder marks submission status for a specific participant."""
+    service = HomeworkService(session=session)
+    part = await service.update_participant_status(
+        user=current_user,
+        homework_id=homework_id,
+        target_user_id=user_id,
+        data=data,
+    )
+    display_name = part.user.display_name if part.user else None
+    return HomeworkParticipantRead(
+        user_id=part.user_id,
+        display_name=display_name,
+        is_submitted=part.is_submitted,
+        submitted_at=part.submitted_at,
+    )
+
+
+@router.post("/{homework_id}/complete", response_model=HomeworkCompletionResponse)
+async def toggle_homework_completion(
+    homework_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HomeworkCompletionResponse:
+    """Toggle student's personal completion status."""
+    service = HomeworkService(session=session)
+    return await service.toggle_completion(user=current_user, homework_id=homework_id)
 
 
 @router.delete("/{homework_id}", status_code=status.HTTP_204_NO_CONTENT)

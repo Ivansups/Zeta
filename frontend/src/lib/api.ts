@@ -41,23 +41,42 @@ export type ApiGroup = {
 export type ApiHomeworkInput = {
   title?: string;
   description: string;
-  deadline: string;
+  deadline?: string | null;
   subject?: string;
   subgroup?: number | null;
   schedule_pair_id?: string | null;
-  group_id?: string;
+  group_id?: string | null;
+  is_personal?: boolean;
+  target_type?: string;
+  participant_ids?: string[];
+};
+
+export type ApiHomeworkParticipant = {
+  user_id: string;
+  display_name?: string | null;
+  is_submitted: boolean;
+  submitted_at?: string | null;
 };
 
 export type ApiHomework = {
   id: string;
-  group_id: string;
+  group_id?: string | null;
   group_name?: string | null;
   schedule_pair_id?: string | null;
   subgroup?: number | null;
   title: string;
   description: string;
   subject?: string | null;
-  deadline: string;
+  deadline?: string | null;
+  is_personal?: boolean;
+  status?: "approved" | "pending_approval" | "rejected" | "recalled";
+  target_type?: "all" | "subgroup" | "custom";
+  moderation_comment?: string | null;
+  approved_by_id?: string | null;
+  edited_by_id?: string | null;
+  submitted_to_group_at?: string | null;
+  is_completed?: boolean;
+  participants?: ApiHomeworkParticipant[];
   created_by_id?: string | null;
   created_at: string;
   updated_at: string;
@@ -243,6 +262,57 @@ export const api = {
     if (!res.ok) {
       throw new Error(`Failed to delete homework: ${res.status}`);
     }
+  },
+
+  async suggestHomework(homeworkId: string): Promise<ApiHomework> {
+    const res = await request(`/api/homework/${homeworkId}/suggest`, jsonInit("POST"));
+    return handleResponse<ApiHomework>(res);
+  },
+
+  async recallHomework(homeworkId: string): Promise<ApiHomework> {
+    const res = await request(`/api/homework/${homeworkId}/recall`, jsonInit("POST"));
+    return handleResponse<ApiHomework>(res);
+  },
+
+  async moderateHomework(
+    homeworkId: string,
+    data: {
+      action: "approve" | "reject";
+      moderation_comment?: string;
+      title?: string;
+      description?: string;
+      deadline?: string | null;
+      subgroup?: number | null;
+      subject?: string;
+      target_type?: string;
+      participant_ids?: string[];
+    },
+  ): Promise<ApiHomework> {
+    const res = await request(`/api/homework/${homeworkId}/moderate`, jsonInit("POST", data));
+    return handleResponse<ApiHomework>(res);
+  },
+
+  async updateParticipantStatus(
+    homeworkId: string,
+    userId: string,
+    isSubmitted: boolean,
+  ): Promise<ApiHomeworkParticipant> {
+    const res = await request(
+      `/api/homework/${homeworkId}/participants/${userId}/status`,
+      jsonInit("POST", { is_submitted: isSubmitted }),
+    );
+    return handleResponse<ApiHomeworkParticipant>(res);
+  },
+
+  async toggleHomeworkCompletion(
+    homeworkId: string,
+  ): Promise<{ homework_id: string; is_completed: boolean; completed_at?: string | null }> {
+    const res = await request(`/api/homework/${homeworkId}/complete`, jsonInit("POST"));
+    return handleResponse<{
+      homework_id: string;
+      is_completed: boolean;
+      completed_at?: string | null;
+    }>(res);
   },
 
   async parseHomework(text: string): Promise<ApiHomeworkPreview> {

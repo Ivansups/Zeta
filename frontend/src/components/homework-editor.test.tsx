@@ -35,7 +35,9 @@ describe("HomeworkEditor", () => {
     await user.clear(dueDateInput);
 
     await user.click(screen.getByRole("button", { name: "Сохранить ДЗ" }));
-    expect(screen.getByText("Укажите дату сдачи")).toBeInTheDocument();
+    expect(
+      screen.getByText("Укажите дату сдачи или отметьте 'Без дедлайна'"),
+    ).toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
   });
 
@@ -64,6 +66,8 @@ describe("HomeworkEditor", () => {
       subgroup: 1,
       dueDate: "2026-10-22",
       description: "Решить задачи 12–18 из практикума",
+      isPersonal: false,
+      noDeadline: false,
     });
   });
 
@@ -108,6 +112,8 @@ describe("HomeworkEditor", () => {
       subgroup: "all",
       dueDate: "2026-10-23",
       description: "Обновлённое задание по дискретной математике",
+      isPersonal: false,
+      noDeadline: false,
     });
   });
 
@@ -208,6 +214,39 @@ describe("HomeworkEditor", () => {
       subgroup: "all",
       dueDate: "2026-10-22",
       description: "решить номера 12–18 и повторить теорию",
+      isPersonal: false,
+      noDeadline: false,
+    });
+  });
+
+  it("submits a personal homework task without a deadline", async () => {
+    const user = userEvent.setup();
+    const onSave = jest.fn();
+
+    render(<HomeworkEditor open lessons={testLessons} onClose={jest.fn()} onSave={onSave} />);
+
+    // Toggle personal checkbox
+    const personalCheckbox = screen.getByLabelText("Личная задача (только для меня)");
+    await user.click(personalCheckbox);
+
+    // Toggle no-deadline checkbox
+    const noDeadlineCheckbox = screen.getByLabelText("Без дедлайна");
+    await user.click(noDeadlineCheckbox);
+
+    await user.type(
+      screen.getByLabelText("Описание задания"),
+      "Прочитать книгу по алгоритмам",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Сохранить ДЗ" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      lessonId: "math-2026-10-15",
+      subgroup: "all",
+      dueDate: null,
+      description: "Прочитать книгу по алгоритмам",
+      isPersonal: true,
+      noDeadline: true,
     });
   });
 

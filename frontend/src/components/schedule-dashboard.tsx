@@ -56,7 +56,12 @@ function matchingHomework(
         (hw.subject?.toLowerCase() === pair.subject.toLowerCase() &&
           (!hw.subgroup || hw.subgroup === pair.subgroup)),
     )
-    .sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
+    .sort((a, b) => {
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return a.deadline.localeCompare(b.deadline);
+    })[0];
 }
 
 function mapApiPairToLesson(
@@ -219,7 +224,12 @@ export function ScheduleDashboard(): React.JSX.Element {
   const upcomingHomeworks = useMemo(
     () =>
       [...visibleHomeworks]
-        .sort((a, b) => a.deadline.localeCompare(b.deadline))
+        .sort((a, b) => {
+          if (!a.deadline && !b.deadline) return 0;
+          if (!a.deadline) return 1;
+          if (!b.deadline) return -1;
+          return a.deadline.localeCompare(b.deadline);
+        })
         .slice(0, 3),
     [visibleHomeworks],
   );
@@ -274,13 +284,15 @@ export function ScheduleDashboard(): React.JSX.Element {
   async function handleSave(draft: HomeworkDraft): Promise<void> {
     const lesson = weekPairs.find((pair) => pair.id === draft.lessonId);
     const subject = draft.subject || lesson?.subject || "Домашнее задание";
+    const deadlineVal = draft.noDeadline || !draft.dueDate ? null : deadlineToIso(draft.dueDate);
     const payload = {
       title: subject,
       description: draft.description,
       subject,
-      deadline: deadlineToIso(draft.dueDate),
+      deadline: deadlineVal,
       subgroup: draft.subgroup === "all" ? null : draft.subgroup,
       schedule_pair_id: UUID_PATTERN.test(draft.lessonId) ? draft.lessonId : undefined,
+      is_personal: draft.isPersonal,
     };
 
     if (draft.id) {

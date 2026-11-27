@@ -1,7 +1,7 @@
 import { deadlineDate, localIsoDate } from "./dates";
 import { WEEK_DAYS, addDays, formatDayCaption } from "./week";
 
-export type HomeworkColumnKey = "overdue" | "today" | "tomorrow" | "later";
+export type HomeworkColumnKey = "overdue" | "today" | "tomorrow" | "later" | "backlog";
 
 export type HomeworkColumn = {
   key: HomeworkColumnKey;
@@ -29,13 +29,17 @@ export function buildHomeworkColumns(today: Date): HomeworkColumn[] {
       caption: formatDayCaption(addDays(today, 1)),
     },
     { key: "later", title: "Позже", caption: "Следующие дни" },
+    { key: "backlog", title: "Без срока", caption: "Бэклог задач" },
   ];
 }
 
 export function columnKeyForDeadline(
-  deadline: string,
+  deadline: string | null | undefined,
   today: Date,
 ): HomeworkColumnKey {
+  if (!deadline) {
+    return "backlog";
+  }
   const date = deadlineDate(deadline);
   const todayIso = localIsoDate(today);
   if (date < todayIso) {
