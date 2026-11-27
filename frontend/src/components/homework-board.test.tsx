@@ -15,6 +15,10 @@ jest.mock("@/lib/api", () => ({
   },
 }));
 
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
 const mockedApi = api as jest.Mocked<typeof api>;
 
 function deadlineInDays(days: number): string {
@@ -173,5 +177,18 @@ describe("HomeworkBoard", () => {
     // Return back to current week
     await user.click(screen.getByRole("button", { name: "Вернуться к текущей" }));
     expect(screen.getByText("Текущая неделя")).toBeInTheDocument();
+  });
+
+  it("shows onboarding instead of an empty board when the user has no group", async () => {
+    mockedApi.getMe.mockResolvedValue(
+      apiUser({ id: "new-user", group_id: null, group_name: null }),
+    );
+
+    render(<HomeworkBoard />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Настройте учебную группу" }),
+    ).toBeInTheDocument();
+    expect(mockedApi.getHomeworks).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,10 @@ jest.mock("@/lib/api", () => ({
   },
 }));
 
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
 const mockedApi = api as jest.Mocked<typeof api>;
 const today = new Date();
 
@@ -301,5 +305,21 @@ describe("ScheduleDashboard", () => {
 
     expect(await screen.findByText("На этот день пар нет")).toBeInTheDocument();
     expect(screen.getByText("Дедлайнов пока нет")).toBeInTheDocument();
+  });
+
+  it("shows onboarding instead of the schedule when the user has no group", async () => {
+    mockedApi.getMe.mockResolvedValue(
+      apiUser({ id: "new-user", group_id: null, group_name: null }),
+    );
+
+    render(<ScheduleDashboard />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Настройте учебную группу" }),
+    ).toBeInTheDocument();
+    expect(mockedApi.getWeekSchedule).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("heading", { name: "Расписание" }),
+    ).not.toBeInTheDocument();
   });
 });
